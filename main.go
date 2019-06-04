@@ -72,10 +72,8 @@ func main() {
 
 	var (
 		dialer = gobwas.Dialer(gobwas.Options{Header: gobwas.Header{"X-Username": []string{"AMI"}}})
-	
 	)
 	endpoint = viper.GetString("socket.endpoint")
-
 
 	//get asterisk config
 	var ast asteriskConfig
@@ -87,13 +85,20 @@ func main() {
 	a = amigo.New(settings)
 	a.Connect()
 
+	// Listen for connection events
+	a.On("connect", func(message string) {
+		fmt.Println("Ami Connected To Astrisk", message)
+	})
+	a.On("error", func(message string) {
+		fmt.Println("Connection error To Astrisk:", message)
+	})
+
 	err = a.RegisterHandler("VarSet", varSetHandler)
 	if err != nil { // Handle errors reading the config file
 		panic(fmt.Errorf("Fatal error VarSet: %s", err.Error()))
 	}
 
 	client(dialer)
-
 
 	ch := make(chan bool)
 	<-ch
