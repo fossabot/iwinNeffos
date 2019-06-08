@@ -5,7 +5,6 @@ import (
 	"log"
 
 	"github.com/ivahaev/amigo"
-	"github.com/kardianos/osext"
 	"github.com/kataras/neffos"
 	"github.com/kataras/neffos/gobwas"
 	"github.com/spf13/viper"
@@ -54,14 +53,14 @@ var handler = neffos.Namespaces{
 
 func init() {
 
-	path, err := osext.ExecutableFolder()
+	//	path, err := osext.ExecutableFolder()
 
 	if err != nil {
 		panic(fmt.Errorf("Fatal error ExecutableFolder: %s", err.Error()))
 	}
 
 	viper.SetConfigName("config")
-	viper.AddConfigPath(path)
+	viper.AddConfigPath(".")
 	err = viper.ReadInConfig() // Find and read the config file
 	if err != nil {            // Handle errors reading the config file
 		panic(fmt.Errorf("Fatal error config file: %s", err.Error()))
