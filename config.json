@@ -1,6 +1,6 @@
 {
   "socket": {
-    "endpoint": "localhost:3811"
+    "endpoint": "wss://wss.ami.dev.iwin.local:3811"
   },
   "asterisk":{
     "host":"10.1.10.15",
