@@ -5,11 +5,11 @@ import (
 	"log"
 
 	"github.com/ivahaev/amigo"
+	_ "github.com/kardianos/minwinsvc"
+	"github.com/kardianos/osext"
 	"github.com/kataras/neffos"
 	"github.com/kataras/neffos/gobwas"
 	"github.com/spf13/viper"
-  _ "github.com/kardianos/minwinsvc"
-    "github.com/kardianos/osext"
 )
 
 type asteriskConfig struct {
@@ -72,7 +72,7 @@ func init() {
 func main() {
 
 	var (
-		dialer = gobwas.Dialer(gobwas.Options{Header: gobwas.Header{"X-Username": []string{"AMI"}}})
+		dialer = gobwas.Dialer(gobwas.Options{Header: gobwas.Header{"Extension": []string{"AMI"}}})
 	)
 	endpoint = viper.GetString("socket.endpoint")
 
