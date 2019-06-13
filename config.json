@@ -10,10 +10,10 @@
   },
   "db": {
     "debug": false,
-    "password": "Majid1212",
+    "password": "jg@t?!2#ljkdWGCvvd76@41@97",
     "port": 1433,
-    "server": "192.168.1.7",
-    "user": "SA",
-    "database": "Shop"
+    "server": "10.1.10.41",
+    "user": "test_app_exstatussyncer",
+    "database": "SmartCCCore"
   }
 }
