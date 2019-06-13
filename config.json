@@ -2,10 +2,18 @@
   "socket": {
     "endpoint": "wss://wss.ami.dev.iwin.local:3811"
   },
-  "asterisk":{
-    "host":"10.1.10.15",
-    "port":"5038",
-    "username":"sls",
-    "password":"sls@2016@sls"
+  "asterisk": {
+    "host": "10.1.10.15",
+    "port": "5038",
+    "username": "sls",
+    "password": "sls@2016@sls"
+  },
+  "db": {
+    "debug": false,
+    "password": "Majid1212",
+    "port": 1433,
+    "server": "192.168.1.7",
+    "user": "SA",
+    "database": "Shop"
   }
 }

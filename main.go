@@ -4,6 +4,9 @@ import (
 	"fmt"
 	"log"
 
+	"github.com/majidbigdeli/neffosAmi/domin/data"
+
+	_ "github.com/denisenkom/go-mssqldb"
 	"github.com/ivahaev/amigo"
 	_ "github.com/kardianos/minwinsvc"
 	"github.com/kardianos/osext"
@@ -40,6 +43,10 @@ func varSetHandler(e map[string]string) {
 	}
 }
 
+func extensionStatusHandler(e map[string]string) {
+
+}
+
 var handler = neffos.Namespaces{
 	namespace: neffos.Events{
 		neffos.OnNamespaceConnected: func(c *neffos.NSConn, msg neffos.Message) error {
@@ -67,6 +74,9 @@ func init() {
 	if err != nil {            // Handle errors reading the config file
 		panic(fmt.Errorf("Fatal error config file: %s", err.Error()))
 	}
+
+	data.GetDB()
+
 }
 
 func main() {
@@ -98,6 +108,8 @@ func main() {
 	if err != nil { // Handle errors reading the config file
 		panic(fmt.Errorf("Fatal error VarSet: %s", err.Error()))
 	}
+
+	err = a.RegisterHandler("ExtensionStatus", extensionStatusHandler)
 
 	client(dialer)
 
