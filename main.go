@@ -6,8 +6,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/kataras/neffos/gobwas"
-
 	"github.com/majidbigdeli/neffosAmi/domin/data"
 
 	_ "github.com/denisenkom/go-mssqldb"
@@ -160,9 +158,9 @@ func init() {
 
 func main() {
 
-	var (
-		dialer = gobwas.Dialer(gobwas.Options{Header: gobwas.Header{"Extension": []string{"AMI"}}})
-	)
+	// var (
+	// 	dialer = gobwas.Dialer(gobwas.Options{Header: gobwas.Header{"Extension": []string{"AMI"}}})
+	// )
 	endpoint = viper.GetString("socket.endpoint")
 
 	//get asterisk config
@@ -212,7 +210,7 @@ func main() {
 		panic(fmt.Errorf("Fatal error QueueMemberPause: %s", err.Error()))
 	}
 
-	client(dialer)
+	//client(dialer)
 
 	ch := make(chan bool)
 	<-ch
