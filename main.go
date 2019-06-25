@@ -3,16 +3,12 @@ package main
 import (
 	"fmt"
 	"log"
-	"strconv"
-	"strings"
 
-	"github.com/majidbigdeli/neffosAmi/domin/data"
-
-	_ "github.com/denisenkom/go-mssqldb"
 	"github.com/ivahaev/amigo"
 	_ "github.com/kardianos/minwinsvc"
 	"github.com/kardianos/osext"
 	"github.com/kataras/neffos"
+	"github.com/kataras/neffos/gobwas"
 	"github.com/spf13/viper"
 )
 
@@ -44,86 +40,6 @@ func varSetHandler(e map[string]string) {
 	}
 }
 
-func extensionStatusHandler(e map[string]string) {
-	extenStr := e["Exten"]
-	statusStr := e["Status"]
-	statusText := e["StatusText"]
-	extenNum, err := strconv.Atoi(extenStr)
-	if err != nil {
-		fmt.Printf(err.Error())
-	}
-	StatusNum, err := strconv.Atoi(statusStr)
-	if err != nil {
-		fmt.Printf(err.Error())
-	}
-	log.Printf("[%s] =====> [%s]", extenStr, statusText)
-	data.InsertExtensionStatus(extenNum, StatusNum)
-}
-
-func queueMemberAddedHandler(e map[string]string) {
-	split1 := strings.Split(e["Interface"], "/")[1]
-	extensionStr := strings.Split(split1, "@")[0]
-	extensionNum, err := strconv.Atoi(extensionStr)
-
-	if err != nil {
-		fmt.Printf(err.Error())
-	}
-	queueNum, err := strconv.Atoi(e["Queue"])
-
-	if err != nil {
-		fmt.Printf(err.Error())
-	}
-
-	data.InsertAgentQueueStatus(extensionNum, queueNum, 1550)
-
-}
-
-func queueMemberRemovedHandler(e map[string]string) {
-	split1 := strings.Split(e["Interface"], "/")[1]
-	extensionStr := strings.Split(split1, "@")[0]
-	extensionNum, err := strconv.Atoi(extensionStr)
-
-	if err != nil {
-		fmt.Printf(err.Error())
-	}
-	queueNum, err := strconv.Atoi(e["Queue"])
-
-	if err != nil {
-		fmt.Printf(err.Error())
-	}
-
-	data.InsertAgentQueueStatus(extensionNum, queueNum, 1552)
-
-}
-
-func queueMemberPauseHandler(e map[string]string) {
-	split1 := strings.Split(e["Interface"], "/")[1]
-	extensionStr := strings.Split(split1, "@")[0]
-	extensionNum, err := strconv.Atoi(extensionStr)
-
-	if err != nil {
-		fmt.Printf(err.Error())
-	}
-	queueNum, err := strconv.Atoi(e["Queue"])
-
-	if err != nil {
-		fmt.Printf(err.Error())
-	}
-
-	status, err := strconv.Atoi(e["Paused"])
-	if err != nil {
-		fmt.Printf(err.Error())
-	}
-	statusNum := 1551
-
-	if status == 0 {
-		statusNum = 1550
-	}
-
-	data.InsertAgentQueueStatus(extensionNum, queueNum, statusNum)
-
-}
-
 var handler = neffos.Namespaces{
 	namespace: neffos.Events{
 		neffos.OnNamespaceConnected: func(c *neffos.NSConn, msg neffos.Message) error {
@@ -151,16 +67,13 @@ func init() {
 	if err != nil {            // Handle errors reading the config file
 		panic(fmt.Errorf("Fatal error config file: %s", err.Error()))
 	}
-
-	data.GetDB()
-
 }
 
 func main() {
 
-	// var (
-	// 	dialer = gobwas.Dialer(gobwas.Options{Header: gobwas.Header{"Extension": []string{"AMI"}}})
-	// )
+	var (
+		dialer = gobwas.Dialer(gobwas.Options{Header: gobwas.Header{"Extension": []string{"AMI"}}})
+	)
 	endpoint = viper.GetString("socket.endpoint")
 
 	//get asterisk config
@@ -186,31 +99,7 @@ func main() {
 		panic(fmt.Errorf("Fatal error VarSet: %s", err.Error()))
 	}
 
-	err = a.RegisterHandler("ExtensionStatus", extensionStatusHandler)
-
-	if err != nil { // Handle errors reading the config file
-		panic(fmt.Errorf("Fatal error ExtensionStatus: %s", err.Error()))
-	}
-
-	err = a.RegisterHandler("QueueMemberAdded", queueMemberAddedHandler)
-
-	if err != nil { // Handle errors reading the config file
-		panic(fmt.Errorf("Fatal error QueueMemberAdded: %s", err.Error()))
-	}
-
-	err = a.RegisterHandler("QueueMemberRemoved", queueMemberRemovedHandler)
-
-	if err != nil { // Handle errors reading the config file
-		panic(fmt.Errorf("Fatal error QueueMemberRemoved: %s", err.Error()))
-	}
-
-	err = a.RegisterHandler("QueueMemberPause", queueMemberPauseHandler)
-
-	if err != nil { // Handle errors reading the config file
-		panic(fmt.Errorf("Fatal error QueueMemberPause: %s", err.Error()))
-	}
-
-	//client(dialer)
+	client(dialer)
 
 	ch := make(chan bool)
 	<-ch
