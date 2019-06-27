@@ -15,5 +15,10 @@
     "server": "10.1.10.41",
     "user": "test_app_exstatussyncer",
     "database": "SmartCCCore"
-  }
+  },
+  "server": {
+    "addr":":3811",
+    "certFile":"Certificate/server.crt",
+    "keyFile":"Certificate/server.key"
+}    
 }

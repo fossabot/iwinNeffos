@@ -1,14 +1,22 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
+	"net/http"
+	"path"
+	"strconv"
+	"strings"
+	"time"
 
+	_ "github.com/denisenkom/go-mssqldb"
 	"github.com/ivahaev/amigo"
 	_ "github.com/kardianos/minwinsvc"
 	"github.com/kardianos/osext"
 	"github.com/kataras/neffos"
 	"github.com/kataras/neffos/gobwas"
+	"github.com/majidbigdeli/neffosAmi/domin/data"
 	"github.com/spf13/viper"
 )
 
@@ -21,36 +29,21 @@ type asteriskConfig struct {
 
 var (
 	a        *amigo.Amigo
-	c        *neffos.NSConn
+	server   *neffos.Server
 	err      error
-	endpoint string
+	exePath  string
+	showForm = "showForm"
 )
 
 const (
 	namespace = "default"
 )
 
-func varSetHandler(e map[string]string) {
-	switch e["Variable"] {
-	case "__ExtCallId":
-		{
-			fmt.Println("__ExtCallId :", e["Value"])
-			_ = c.Emit("send", []byte(e["Value"]))
-		}
-	}
-}
-
-var handler = neffos.Namespaces{
-	namespace: neffos.Events{
-		neffos.OnNamespaceConnected: func(c *neffos.NSConn, msg neffos.Message) error {
-			log.Printf("[%s] connected to namespace [%s].", c, msg.Namespace)
-			return nil
-		},
-		neffos.OnNamespaceDisconnect: func(c *neffos.NSConn, msg neffos.Message) error {
-			log.Printf("[%s] disconnected from namespace [%s].", c, msg.Namespace)
-			return nil
-		},
-	},
+type userMessage struct {
+	Extension    int   `json:"Extension"`
+	Direction    int   `json:"Direction"`
+	CallID       int64 `json:"CallId"`
+	CallerNumber int64 `json:"CallerNumber"`
 }
 
 func init() {
@@ -67,20 +60,24 @@ func init() {
 	if err != nil {            // Handle errors reading the config file
 		panic(fmt.Errorf("Fatal error config file: %s", err.Error()))
 	}
+	data.GetDB()
 }
 
 func main() {
-
-	var (
-		dialer = gobwas.Dialer(gobwas.Options{Header: gobwas.Header{"Extension": []string{"AMI"}}})
-	)
-	endpoint = viper.GetString("socket.endpoint")
 
 	//get asterisk config
 	var ast asteriskConfig
 	if err := viper.UnmarshalKey("asterisk", &ast); err != nil {
 		panic(err)
 	}
+
+	addr := viper.GetString("server.addr")
+	certFile := viper.GetString("server.certFile")
+	keyFile := viper.GetString("server.keyFile")
+
+	certPath := path.Join(exePath, certFile)
+	keyPath := path.Join(exePath, keyFile)
+
 	settings := &amigo.Settings{Host: ast.Host, Port: ast.Port, Username: ast.Username, Password: ast.Password}
 
 	a = amigo.New(settings)
@@ -96,24 +93,99 @@ func main() {
 
 	err = a.RegisterHandler("VarSet", varSetHandler)
 	if err != nil { // Handle errors reading the config file
-		panic(fmt.Errorf("Fatal error VarSet: %s", err.Error()))
+		fmt.Printf("Fatal error VarSet: %s", err.Error())
 	}
 
-	client(dialer)
+	server = neffos.New(gobwas.DefaultUpgrader, events)
+	server.IDGenerator = func(w http.ResponseWriter, r *http.Request) string {
+		if userID := r.Header.Get("Extension"); userID != "" {
+			return userID
+		}
+		return neffos.DefaultIDGenerator(w, r)
+	}
 
-	ch := make(chan bool)
-	<-ch
+	server.OnUpgradeError = func(err error) {
+		log.Printf("ERROR: %v", err)
+	}
+
+	server.OnConnect = func(c *neffos.Conn) error {
+		if c.WasReconnected() {
+			log.Printf("[%s] connection is a result of a client-side re-connection, with tries: %d", c.ID(), c.ReconnectTries)
+		}
+
+		log.Printf("[%s] connected to the server.", c)
+
+		// if returns non-nil error then it refuses the client to connect to the server.
+		return nil
+	}
+
+	server.OnDisconnect = func(c *neffos.Conn) {
+		log.Printf("[%s] disconnected from the server.", c)
+	}
+
+	serveMux := http.NewServeMux()
+	serveMux.Handle("/echo", server)
+	th := http.HandlerFunc(timeHandler)
+	serveMux.Handle("/time", th)
+
+	log.Printf("Listening on: %s\nPress CTRL/CMD+C to interrupt.", addr)
+	log.Fatal(http.ListenAndServeTLS(addr, certPath, keyPath, serveMux))
+
 }
 
-func client(dialer neffos.Dialer) {
+func varSetHandler(e map[string]string) {
+	switch e["Variable"] {
+	case "__ExtCallId":
+		{
+			// fmt.Println("__ExtCallId :", e["Value"])
 
-	client, err := neffos.Dial(nil, dialer, endpoint, handler)
-	if err != nil {
-		log.Print(err)
+			var userMsg userMessage
+			s := e["Value"]
+			s = strings.Replace(s, "Extension", "\"Extension\"", 1)
+			s = strings.Replace(s, "CallId", "\"CallId\"", 1)
+			s = strings.Replace(s, "Direction", "\"Direction\"", 1)
+			s = strings.Replace(s, "CallerNumber", "\"CallerNumber\"", 1)
+
+			err := json.Unmarshal([]byte(s), &userMsg)
+
+			if err != nil {
+				log.Print(err)
+				return
+			}
+
+			if userMsg.Direction != 2910 {
+				return
+			}
+
+			extensionMessage := strconv.Itoa(userMsg.Extension)
+
+			server.Broadcast(nil, neffos.Message{
+				To:        extensionMessage,
+				Namespace: namespace,
+				Event:     showForm,
+				Body:      []byte(s),
+			})
+
+			data.InsertLogForForm(userMsg.Extension, userMsg.Direction, 1, userMsg.CallID, userMsg.CallerNumber)
+
+		}
 	}
-	//defer client.Close()
-	c, err = client.Connect(nil, namespace)
-	if err != nil {
-		panic(err)
-	}
+}
+
+func timeHandler(w http.ResponseWriter, r *http.Request) {
+	tm := time.Now().Format(time.RFC1123)
+	w.Write([]byte("The time is: " + tm))
+}
+
+var events = neffos.Namespaces{
+	namespace: neffos.Events{
+		neffos.OnNamespaceConnected: func(c *neffos.NSConn, msg neffos.Message) error {
+			log.Printf("[%s] connected to namespace [%s].", c, msg.Namespace)
+			return nil
+		},
+		neffos.OnNamespaceDisconnect: func(c *neffos.NSConn, msg neffos.Message) error {
+			log.Printf("[%s] disconnected from namespace [%s].", c, msg.Namespace)
+			return nil
+		},
+	},
 }

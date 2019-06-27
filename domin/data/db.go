@@ -38,8 +38,10 @@ func GetDB() {
 		panic(err)
 	}
 
-	conn.SetMaxOpenConns(5)
-	conn.SetMaxIdleConns(5)
+	conn.SetMaxOpenConns(7)
+	conn.SetMaxIdleConns(7)
+
+	fmt.Printf("Connect To Database\n")
 
 	//	fmt.Printf("Connected!\n")
 	//	defer conn.Close()

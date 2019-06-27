@@ -46,3 +46,17 @@ func InsertAgentQueueStatus(extensionNumber, queueNumber, status int) {
 		fmt.Printf(err.Error())
 	}
 }
+
+//InsertLogForForm ...
+func InsertLogForForm(extension, direction, typeSend int, callID, callerNumber int64) {
+	_, err := db.Exec("service.uspInsertLogForForm1",
+		sql.Named("PI_Extension", extension),
+		sql.Named("PI_Direction", direction),
+		sql.Named("PI_CallID", callID),
+		sql.Named("PI_CallerNumber", callerNumber),
+		sql.Named("PI_Type", typeSend),
+	)
+	if err != nil {
+		fmt.Printf(err.Error())
+	}
+}
