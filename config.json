@@ -3,17 +3,17 @@
     "endpoint": "wss://wss.ami.dev.iwin.local:3811"
   },
   "asterisk": {
-    "host": "10.1.10.15",
+    "host": "10.1.10.45",
     "port": "5038",
     "username": "sls",
     "password": "sls@2016@sls"
   },
   "db": {
     "debug": false,
-    "password": "jg@t?!2#ljkdWGCvvd76@41@97",
+    "password": "Zf4971938193410560671",
     "port": 1433,
     "server": "10.1.10.41",
-    "user": "test_app_exstatussyncer",
+    "user": "test_appCore_user",
     "database": "SmartCCCore"
   },
   "server": {
