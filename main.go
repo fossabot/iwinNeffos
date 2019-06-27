@@ -141,6 +141,7 @@ func varSetHandler(e map[string]string) {
 
 			var userMsg userMessage
 			s := e["Value"]
+			fmt.Println("__ExtCallId :", s)
 			s = strings.Replace(s, "Extension", "\"Extension\"", 1)
 			s = strings.Replace(s, "CallId", "\"CallId\"", 1)
 			s = strings.Replace(s, "Direction", "\"Direction\"", 1)
