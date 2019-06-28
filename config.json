@@ -10,10 +10,10 @@
   },
   "db": {
     "debug": false,
-    "password": "Zf4971938193410560671",
+    "password": "J7589099259863373393",
     "port": 1433,
     "server": "10.1.10.41",
-    "user": "test_appCore_user",
+    "user": "test_mng_akazem",
     "database": "SmartCCCore"
   },
   "server": {
