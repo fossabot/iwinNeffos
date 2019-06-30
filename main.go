@@ -7,11 +7,9 @@ import (
 	"net/http"
 	"path"
 	"strconv"
-	"strings"
 	"time"
 
 	_ "github.com/denisenkom/go-mssqldb"
-	"github.com/ivahaev/amigo"
 	_ "github.com/kardianos/minwinsvc"
 	"github.com/kardianos/osext"
 	"github.com/kataras/neffos"
@@ -28,7 +26,6 @@ type asteriskConfig struct {
 }
 
 var (
-	a        *amigo.Amigo
 	server   *neffos.Server
 	err      error
 	exePath  string
@@ -65,11 +62,6 @@ func init() {
 
 func main() {
 
-	//get asterisk config
-	var ast asteriskConfig
-	if err := viper.UnmarshalKey("asterisk", &ast); err != nil {
-		panic(err)
-	}
 
 	addr := viper.GetString("server.addr")
 	certFile := viper.GetString("server.certFile")
@@ -77,24 +69,6 @@ func main() {
 
 	certPath := path.Join(exePath, certFile)
 	keyPath := path.Join(exePath, keyFile)
-
-	settings := &amigo.Settings{Host: ast.Host, Port: ast.Port, Username: ast.Username, Password: ast.Password}
-
-	a = amigo.New(settings)
-	a.Connect()
-
-	// Listen for connection events
-	a.On("connect", func(message string) {
-		fmt.Println("Ami Connected To Astrisk", message)
-	})
-	a.On("error", func(message string) {
-		fmt.Println("Connection error To Astrisk:", message)
-	})
-
-	err = a.RegisterHandler("VarSet", varSetHandler)
-	if err != nil { // Handle errors reading the config file
-		fmt.Printf("Fatal error VarSet: %s", err.Error())
-	}
 
 	server = neffos.New(gobwas.DefaultUpgrader, events)
 	server.IDGenerator = func(w http.ResponseWriter, r *http.Request) string {
@@ -126,56 +100,61 @@ func main() {
 	serveMux := http.NewServeMux()
 	serveMux.Handle("/echo", server)
 	th := http.HandlerFunc(timeHandler)
+	broadcast := http.HandlerFunc(broadcastHandler)
 	serveMux.Handle("/time", th)
+	serveMux.Handle("/broadcast",broadcast)
+
+
+	go func() {
+		log.Fatal(http.ListenAndServe(":3812",serveMux))
+	 }()
+	
 
 	log.Printf("Listening on: %s\nPress CTRL/CMD+C to interrupt.", addr)
 	log.Fatal(http.ListenAndServeTLS(addr, certPath, keyPath, serveMux))
 
 }
 
-func varSetHandler(e map[string]string) {
-	switch e["Variable"] {
-	case "__ExtCallId":
-		{
-			// fmt.Println("__ExtCallId :", e["Value"])
 
-			var userMsg userMessage
-			s := e["Value"]
-			fmt.Println("__ExtCallId :", s)
-			s = strings.Replace(s, "Extension", "\"Extension\"", 1)
-			s = strings.Replace(s, "CallId", "\"CallId\"", 1)
-			s = strings.Replace(s, "Direction", "\"Direction\"", 1)
-			s = strings.Replace(s, "CallerNumber", "\"CallerNumber\"", 1)
-
-			err := json.Unmarshal([]byte(s), &userMsg)
-
-			if err != nil {
-				log.Print(err)
-				return
-			}
-
-			if userMsg.Direction != 2910 {
-				return
-			}
-
-			extensionMessage := strconv.Itoa(userMsg.Extension)
-
-			server.Broadcast(nil, neffos.Message{
-				To:        extensionMessage,
-				Namespace: namespace,
-				Event:     showForm,
-				Body:      []byte(s),
-			})
-
-			data.InsertLogForForm(userMsg.Extension, userMsg.Direction, 1, userMsg.CallID, userMsg.CallerNumber)
-
-		}
-	}
-}
 
 func timeHandler(w http.ResponseWriter, r *http.Request) {
 	tm := time.Now().Format(time.RFC1123)
 	w.Write([]byte("The time is: " + tm))
+}
+
+func broadcastHandler(w http.ResponseWriter, r *http.Request){
+
+	var userMsg userMessage
+
+	if r.Body == nil {
+		http.Error(w, "Please send a request body", 400)
+		return
+	}
+	err := json.NewDecoder(r.Body).Decode(&userMsg)
+	if err != nil {
+		http.Error(w, err.Error(), 400)
+		return
+	}
+
+
+	output, err := json.Marshal(userMsg)
+	if err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+
+	extensionMessage := strconv.Itoa(userMsg.Extension)
+
+	server.Broadcast(nil, neffos.Message{
+		To:        extensionMessage,
+		Namespace: namespace,
+		Event:     "showForm",
+		Body:      output,
+	})
+
+	data.InsertLogForForm(userMsg.Extension, userMsg.Direction, 1, userMsg.CallID, userMsg.CallerNumber)
+
+    w.WriteHeader(http.StatusOK)
 }
 
 var events = neffos.Namespaces{

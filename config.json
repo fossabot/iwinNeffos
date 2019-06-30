@@ -14,7 +14,7 @@
     "port": 1433,
     "server": "10.1.10.41",
     "user": "test_mng_akazem",
-    "database": "SmartCCCore"
+    "database": "SmartCCLog"
   },
   "server": {
     "addr":":3811",
