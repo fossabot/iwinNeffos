@@ -15,15 +15,9 @@ import (
 	"github.com/kataras/neffos"
 	"github.com/kataras/neffos/gobwas"
 	"github.com/majidbigdeli/neffosAmi/domin/data"
+	"github.com/rs/cors"
 	"github.com/spf13/viper"
 )
-
-type asteriskConfig struct {
-	Host     string `mapstructure:"host"`
-	Port     string `mapstructure:"port"`
-	Username string `mapstructure:"username"`
-	Password string `mapstructure:"password"`
-}
 
 var (
 	server   *neffos.Server
@@ -61,7 +55,6 @@ func init() {
 }
 
 func main() {
-
 
 	addr := viper.GetString("server.addr")
 	certFile := viper.GetString("server.certFile")
@@ -101,28 +94,28 @@ func main() {
 	serveMux.Handle("/echo", server)
 	th := http.HandlerFunc(timeHandler)
 	broadcast := http.HandlerFunc(broadcastHandler)
+	getbroadcast := http.HandlerFunc(getbroadcastHandeler)
 	serveMux.Handle("/time", th)
-	serveMux.Handle("/broadcast",broadcast)
+	serveMux.Handle("/broadcast", broadcast)
+	serveMux.Handle("/getBroadcast", getbroadcast)
 
+	handler := cors.Default().Handler(serveMux)
 
 	go func() {
-		log.Fatal(http.ListenAndServe(":3812",serveMux))
-	 }()
-	
+		log.Fatal(http.ListenAndServe(":3812", handler))
+	}()
 
 	log.Printf("Listening on: %s\nPress CTRL/CMD+C to interrupt.", addr)
-	log.Fatal(http.ListenAndServeTLS(addr, certPath, keyPath, serveMux))
+	log.Fatal(http.ListenAndServeTLS(addr, certPath, keyPath, handler))
 
 }
-
-
 
 func timeHandler(w http.ResponseWriter, r *http.Request) {
 	tm := time.Now().Format(time.RFC1123)
 	w.Write([]byte("The time is: " + tm))
 }
 
-func broadcastHandler(w http.ResponseWriter, r *http.Request){
+func broadcastHandler(w http.ResponseWriter, r *http.Request) {
 
 	var userMsg userMessage
 
@@ -136,7 +129,6 @@ func broadcastHandler(w http.ResponseWriter, r *http.Request){
 		return
 	}
 
-
 	output, err := json.Marshal(userMsg)
 	if err != nil {
 		http.Error(w, err.Error(), 500)
@@ -148,13 +140,65 @@ func broadcastHandler(w http.ResponseWriter, r *http.Request){
 	server.Broadcast(nil, neffos.Message{
 		To:        extensionMessage,
 		Namespace: namespace,
-		Event:     "showForm",
+		Event:     showForm,
 		Body:      output,
 	})
 
 	data.InsertLogForForm(userMsg.Extension, userMsg.Direction, 1, userMsg.CallID, userMsg.CallerNumber)
 
-    w.WriteHeader(http.StatusOK)
+	w.WriteHeader(http.StatusOK)
+}
+
+func getbroadcastHandeler(w http.ResponseWriter, r *http.Request) {
+
+	queryValues := r.URL.Query()
+
+	extenstionString := queryValues.Get("Extension")
+	extenstion, err := strconv.Atoi(extenstionString)
+	if err != nil {
+		http.Error(w, err.Error(), 400)
+	}
+	direction, err := strconv.Atoi(queryValues.Get("Direction"))
+	if err != nil {
+		http.Error(w, err.Error(), 400)
+	}
+
+	callID, err := strconv.ParseInt(queryValues.Get("CallId"), 10, 64)
+
+	if err != nil {
+		http.Error(w, err.Error(), 400)
+	}
+
+	callerNumber, err := strconv.ParseInt(queryValues.Get("CallerNumber"), 10, 64)
+
+	if err != nil {
+		http.Error(w, err.Error(), 400)
+	}
+
+	userMsg := &userMessage{
+		Extension:    extenstion,
+		Direction:    direction,
+		CallID:       callID,
+		CallerNumber: callerNumber,
+	}
+
+	output, err := json.Marshal(userMsg)
+	if err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+
+	server.Broadcast(nil, neffos.Message{
+		To:        extenstionString,
+		Namespace: namespace,
+		Event:     showForm,
+		Body:      output,
+	})
+
+	data.InsertLogForForm(userMsg.Extension, userMsg.Direction, 1, userMsg.CallID, userMsg.CallerNumber)
+
+	w.WriteHeader(http.StatusOK)
+
 }
 
 var events = neffos.Namespaces{
