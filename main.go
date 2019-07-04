@@ -137,6 +137,12 @@ func broadcastHandler(w http.ResponseWriter, r *http.Request) {
 
 	extensionMessage := strconv.Itoa(userMsg.Extension)
 
+	// ff := server.GetConnections()
+
+	// for c := range ff {
+	// 	fmt.Println(c)
+	// }
+
 	server.Broadcast(nil, neffos.Message{
 		To:        extensionMessage,
 		Namespace: namespace,
