@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"path"
 	"strconv"
+	"sync"
 	"time"
 
 	_ "github.com/denisenkom/go-mssqldb"
@@ -15,6 +16,8 @@ import (
 	"github.com/kataras/neffos"
 	"github.com/kataras/neffos/gobwas"
 	"github.com/majidbigdeli/neffosAmi/domin/data"
+	"github.com/majidbigdeli/neffosAmi/domin/model"
+	"github.com/robfig/cron"
 	"github.com/rs/cors"
 	"github.com/spf13/viper"
 )
@@ -24,6 +27,7 @@ var (
 	err      error
 	exePath  string
 	showForm = "showForm"
+	mutex    = &sync.Mutex{}
 )
 
 const (
@@ -52,10 +56,12 @@ func init() {
 		panic(fmt.Errorf("Fatal error config file: %s", err.Error()))
 	}
 	data.GetDB()
+	data.GetDBData()
 }
 
 func main() {
 
+	trigerTime := viper.GetString("Notification.TrigerTime")
 	addr := viper.GetString("server.addr")
 	certFile := viper.GetString("server.certFile")
 	keyFile := viper.GetString("server.keyFile")
@@ -102,7 +108,18 @@ func main() {
 	handler := cors.Default().Handler(serveMux)
 
 	go func() {
+		log.Printf("Listening on: %s\nPress CTRL/CMD+C to interrupt.", "3812")
 		log.Fatal(http.ListenAndServe(":3812", handler))
+	}()
+
+	go func() {
+		c := cron.New()
+		c.AddFunc("@every "+trigerTime, func() {
+
+			notificationHandler()
+		})
+		c.Start()
+
 	}()
 
 	log.Printf("Listening on: %s\nPress CTRL/CMD+C to interrupt.", addr)
@@ -136,12 +153,6 @@ func broadcastHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	extensionMessage := strconv.Itoa(userMsg.Extension)
-
-	// ff := server.GetConnections()
-
-	// for c := range ff {
-	// 	fmt.Println(c)
-	// }
 
 	server.Broadcast(nil, neffos.Message{
 		To:        extensionMessage,
@@ -207,6 +218,57 @@ func getbroadcastHandeler(w http.ResponseWriter, r *http.Request) {
 
 }
 
+func notificationHandler() {
+	mutex.Lock()
+
+	var gg []model.IDTvp
+
+	connections := server.GetConnections()
+	for c := range connections {
+		var ff model.IDTvp
+		oo, err := strconv.Atoi(c)
+		if err != nil {
+			fmt.Println(err)
+		}
+		ff.ID = oo
+		gg = append(gg, ff)
+	}
+
+	notif, err := data.GetNotificationList(gg)
+
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	if notif != nil {
+		if len(*notif) > 0 {
+			for _, element := range *notif {
+				extensionMessage := strconv.Itoa(element.Number)
+
+				output, err := json.Marshal(element)
+				if err != nil {
+					fmt.Println("error in valid json data")
+					return
+				}
+
+				server.Broadcast(nil, neffos.Message{
+					To:        extensionMessage,
+					Namespace: namespace,
+					Event:     "notification",
+					Body:      output,
+				})
+			}
+		} else {
+			fmt.Println("Result From dataBase For Notif is null")
+		}
+	} else {
+		fmt.Println("any extention is not connect")
+	}
+
+	mutex.Unlock()
+
+}
+
 var events = neffos.Namespaces{
 	namespace: neffos.Events{
 		neffos.OnNamespaceConnected: func(c *neffos.NSConn, msg neffos.Message) error {
@@ -215,6 +277,11 @@ var events = neffos.Namespaces{
 		},
 		neffos.OnNamespaceDisconnect: func(c *neffos.NSConn, msg neffos.Message) error {
 			log.Printf("[%s] disconnected from namespace [%s].", c, msg.Namespace)
+			return nil
+		},
+		"updateStatusNotification": func(c *neffos.NSConn, msg neffos.Message) error {
+			id, _ := strconv.Atoi(string(msg.Body))
+			data.UpdateNotification(id)
 			return nil
 		},
 	},

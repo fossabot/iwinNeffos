@@ -2,12 +2,6 @@
   "socket": {
     "endpoint": "wss://wss.ami.dev.iwin.local:3811"
   },
-  "asterisk": {
-    "host": "10.1.10.45",
-    "port": "5038",
-    "username": "sls",
-    "password": "sls@2016@sls"
-  },
   "db": {
     "debug": false,
     "password": "J7589099259863373393",
@@ -16,9 +10,20 @@
     "user": "test_mng_akazem",
     "database": "SmartCCLog"
   },
+  "dbData": {
+    "debug": false,
+    "password": "S7956198300996619328",
+    "port": 1433,
+    "server": "10.1.10.41",
+    "user": "test_mng_mbigdeli",
+    "database": "SmartCCData"
+  },
   "server": {
-    "addr":":3811",
-    "certFile":"Certificate/server.crt",
-    "keyFile":"Certificate/server.key"
-}    
+    "addr": ":3811",
+    "certFile": "Certificate/server.crt",
+    "keyFile": "Certificate/server.key"
+  },
+  "Notification":{
+    "TrigerTime": "1s"
+  }
 }
