@@ -42,7 +42,7 @@ func GetDB() {
 	conn.SetMaxOpenConns(7)
 	conn.SetMaxIdleConns(7)
 
-	fmt.Printf("Connect To Database\n")
+	fmt.Printf("Connect To Database SmartCCLog\n")
 
 	//	fmt.Printf("Connected!\n")
 	//	defer conn.Close()

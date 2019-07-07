@@ -115,7 +115,6 @@ func main() {
 	go func() {
 		c := cron.New()
 		c.AddFunc("@every "+trigerTime, func() {
-
 			notificationHandler()
 		})
 		c.Start()
@@ -238,13 +237,13 @@ func notificationHandler() {
 
 	if err != nil {
 		fmt.Println(err)
+		return
 	}
 
 	if notif != nil {
 		if len(*notif) > 0 {
 			for _, element := range *notif {
 				extensionMessage := strconv.Itoa(element.Number)
-
 				output, err := json.Marshal(element)
 				if err != nil {
 					fmt.Println("error in valid json data")
@@ -258,11 +257,7 @@ func notificationHandler() {
 					Body:      output,
 				})
 			}
-		} else {
-			fmt.Println("Result From dataBase For Notif is null")
 		}
-	} else {
-		fmt.Println("any extention is not connect")
 	}
 
 	mutex.Unlock()
