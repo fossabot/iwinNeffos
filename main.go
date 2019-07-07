@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/bluele/gcache"
 	_ "github.com/denisenkom/go-mssqldb"
 	_ "github.com/kardianos/minwinsvc"
 	"github.com/kardianos/osext"
@@ -28,6 +29,7 @@ var (
 	exePath  string
 	showForm = "showForm"
 	mutex    = &sync.Mutex{}
+	gc       gcache.Cache
 )
 
 const (
@@ -57,11 +59,16 @@ func init() {
 	}
 	data.GetDB()
 	data.GetDBData()
+	data.GetDBCore()
 }
 
 func main() {
 
-	trigerTime := viper.GetString("Notification.TrigerTime")
+	gc = gcache.New(20).
+		LRU().
+		Build()
+
+	trigerTime := viper.GetString("ConfigurationSetting.TrigerTime")
 	addr := viper.GetString("server.addr")
 	certFile := viper.GetString("server.certFile")
 	keyFile := viper.GetString("server.keyFile")
@@ -114,8 +121,22 @@ func main() {
 
 	go func() {
 		c := cron.New()
-		c.AddFunc("@every "+trigerTime, func() {
+
+		getNotificationTimeHandeler()
+
+		notifTime, err := gc.Get("NotifTime")
+		if err != nil {
+			panic(err)
+		}
+
+		notifTimeVal, _ := notifTime.(string)
+		fmt.Println("notifTimeVal:", notifTimeVal)
+
+		c.AddFunc("@every "+notifTimeVal, func() {
 			notificationHandler()
+		})
+		c.AddFunc("@every "+trigerTime, func() {
+			getNotificationTimeHandeler()
 		})
 		c.Start()
 
@@ -261,6 +282,14 @@ func notificationHandler() {
 	}
 
 	mutex.Unlock()
+
+}
+
+func getNotificationTimeHandeler() {
+
+	r, _ := data.GetNotificationTime()
+
+	gc.Set("NotifTime", r)
 
 }
 

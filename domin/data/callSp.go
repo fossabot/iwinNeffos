@@ -104,3 +104,21 @@ func UpdateNotification(id int) {
 		fmt.Printf(err.Error())
 	}
 }
+
+//GetNotificationTime ....
+func GetNotificationTime() (string, error) {
+	var notiftime string
+
+	err := dbCore.QueryRowx("SELECT [Value] FROM ref.ConfigurationSetting WHERE [Key] = @Key",
+		sql.Named("Key", "NotificationTime")).Scan(&notiftime)
+
+	if err != nil {
+		if err != sql.ErrNoRows {
+			fmt.Println(err)
+			return "1m", err
+		}
+		return "1m", fmt.Errorf("not found Key NotificationTime in Db")
+	}
+
+	return notiftime, nil
+}
