@@ -29,12 +29,18 @@
   },
 
 
-  "server": {
+  "https": {
     "addr": ":3811",
     "certFile": "Certificate/server.crt",
     "keyFile": "Certificate/server.key"
   },
-  "ConfigurationSetting":{
-    "TrigerTime": "30m"
+
+  "http": {
+    "addr": ":3812"
+  },
+
+
+  "Notification":{
+    "Time": "30m"
   }
 }

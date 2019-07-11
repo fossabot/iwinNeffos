@@ -1,6 +1,7 @@
 package model
 
-//Notification ...
+//Notification is model
+//Result For sp app.uspGetNotificationList1
 type Notification struct {
 	NotificationID int    `json:"NotificationId" db:"NotificationId"`
 	UserID         int    `json:"UserId" db:"UserId"`

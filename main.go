@@ -8,78 +8,59 @@ import (
 	"path"
 	"strconv"
 	"sync"
-	"time"
 
-	"github.com/bluele/gcache"
 	_ "github.com/denisenkom/go-mssqldb"
 	_ "github.com/kardianos/minwinsvc"
 	"github.com/kardianos/osext"
 	"github.com/kataras/neffos"
 	"github.com/kataras/neffos/gobwas"
+	"github.com/majidbigdeli/neffosAmi/domin/config"
 	"github.com/majidbigdeli/neffosAmi/domin/data"
+	"github.com/majidbigdeli/neffosAmi/domin/dto"
 	"github.com/majidbigdeli/neffosAmi/domin/model"
+	"github.com/majidbigdeli/neffosAmi/domin/variable"
+
 	"github.com/robfig/cron"
 	"github.com/rs/cors"
 	"github.com/spf13/viper"
 )
 
 var (
-	server   *neffos.Server
-	err      error
-	exePath  string
-	showForm = "showForm"
-	mutex    = &sync.Mutex{}
-	gc       gcache.Cache
+	server  *neffos.Server
+	exePath string
+	mutex   = &sync.Mutex{}
 )
-
-const (
-	namespace = "default"
-)
-
-type userMessage struct {
-	Extension    int   `json:"Extension"`
-	Direction    int   `json:"Direction"`
-	CallID       int64 `json:"CallId"`
-	CallerNumber int64 `json:"CallerNumber"`
-}
 
 func init() {
 
-	path, err := osext.ExecutableFolder()
+	pathExe, err := osext.ExecutableFolder()
 
 	if err != nil {
-		panic(fmt.Errorf("Fatal error ExecutableFolder: %s", err.Error()))
+		panic(fmt.Errorf("fatal error ExecutableFolder: %s", err.Error()))
 	}
 
 	viper.SetConfigName("config")
-	viper.AddConfigPath(path)
+	viper.AddConfigPath(pathExe)
 	err = viper.ReadInConfig() // Find and read the config file
 	if err != nil {            // Handle errors reading the config file
-		panic(fmt.Errorf("Fatal error config file: %s", err.Error()))
+		panic(fmt.Errorf("fatal error config file: %s", err.Error()))
 	}
 	data.GetDB()
 	data.GetDBData()
 	data.GetDBCore()
+	config.GetConfig()
 }
 
 func main() {
 
-	gc = gcache.New(20).
-		LRU().
-		Build()
-
-	trigerTime := viper.GetString("ConfigurationSetting.TrigerTime")
-	addr := viper.GetString("server.addr")
-	certFile := viper.GetString("server.certFile")
-	keyFile := viper.GetString("server.keyFile")
-
-	certPath := path.Join(exePath, certFile)
-	keyPath := path.Join(exePath, keyFile)
+	certPath := path.Join(exePath, config.CertFile)
+	keyPath := path.Join(exePath, config.KeyFile)
 
 	server = neffos.New(gobwas.DefaultUpgrader, events)
+
 	server.IDGenerator = func(w http.ResponseWriter, r *http.Request) string {
-		if userID := r.Header.Get("Extension"); userID != "" {
-			return userID
+		if extension := r.Header.Get("Extension"); extension != "" {
+			return extension
 		}
 		return neffos.DefaultIDGenerator(w, r)
 	}
@@ -105,56 +86,35 @@ func main() {
 
 	serveMux := http.NewServeMux()
 	serveMux.Handle("/echo", server)
-	th := http.HandlerFunc(timeHandler)
+
 	broadcast := http.HandlerFunc(broadcastHandler)
-	getbroadcast := http.HandlerFunc(getbroadcastHandeler)
-	serveMux.Handle("/time", th)
 	serveMux.Handle("/broadcast", broadcast)
-	serveMux.Handle("/getBroadcast", getbroadcast)
 
 	handler := cors.Default().Handler(serveMux)
 
 	go func() {
-		log.Printf("Listening on: %s\nPress CTRL/CMD+C to interrupt.", "3812")
-		log.Fatal(http.ListenAndServe(":3812", handler))
+		log.Printf("Listening on: %s\nPress CTRL/CMD+C to interrupt.", config.HTTPAddr)
+		log.Fatal(http.ListenAndServe(config.HTTPAddr, handler))
 	}()
 
 	go func() {
 		c := cron.New()
-
-		getNotificationTimeHandeler()
-
-		notifTime, err := gc.Get("NotifTime")
-		if err != nil {
-			panic(err)
-		}
-
-		notifTimeVal, _ := notifTime.(string)
-		fmt.Println("notifTimeVal:", notifTimeVal)
-
-		c.AddFunc("@every "+notifTimeVal, func() {
+		_ = c.AddFunc("@every "+config.NotifTime, func() {
 			notificationHandler()
 		})
-		c.AddFunc("@every "+trigerTime, func() {
-			getNotificationTimeHandeler()
-		})
+
 		c.Start()
 
 	}()
 
-	log.Printf("Listening on: %s\nPress CTRL/CMD+C to interrupt.", addr)
-	log.Fatal(http.ListenAndServeTLS(addr, certPath, keyPath, handler))
+	log.Printf("Listening on: %s\nPress CTRL/CMD+C to interrupt.", config.Addr)
+	log.Fatal(http.ListenAndServeTLS(config.Addr, certPath, keyPath, handler))
 
-}
-
-func timeHandler(w http.ResponseWriter, r *http.Request) {
-	tm := time.Now().Format(time.RFC1123)
-	w.Write([]byte("The time is: " + tm))
 }
 
 func broadcastHandler(w http.ResponseWriter, r *http.Request) {
 
-	var userMsg userMessage
+	var userMsg dto.FormDto
 
 	if r.Body == nil {
 		http.Error(w, "Please send a request body", 400)
@@ -166,76 +126,18 @@ func broadcastHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	output, err := json.Marshal(userMsg)
-	if err != nil {
-		http.Error(w, err.Error(), 500)
-		return
-	}
-
 	extensionMessage := strconv.Itoa(userMsg.Extension)
 
 	server.Broadcast(nil, neffos.Message{
 		To:        extensionMessage,
-		Namespace: namespace,
-		Event:     showForm,
-		Body:      output,
+		Namespace: variable.Agent,
+		Event:     variable.OnShowForm,
+		Body:      neffos.Marshal(userMsg),
 	})
 
 	data.InsertLogForForm(userMsg.Extension, userMsg.Direction, 1, userMsg.CallID, userMsg.CallerNumber)
 
 	w.WriteHeader(http.StatusOK)
-}
-
-func getbroadcastHandeler(w http.ResponseWriter, r *http.Request) {
-
-	queryValues := r.URL.Query()
-
-	extenstionString := queryValues.Get("Extension")
-	extenstion, err := strconv.Atoi(extenstionString)
-	if err != nil {
-		http.Error(w, err.Error(), 400)
-	}
-	direction, err := strconv.Atoi(queryValues.Get("Direction"))
-	if err != nil {
-		http.Error(w, err.Error(), 400)
-	}
-
-	callID, err := strconv.ParseInt(queryValues.Get("CallId"), 10, 64)
-
-	if err != nil {
-		http.Error(w, err.Error(), 400)
-	}
-
-	callerNumber, err := strconv.ParseInt(queryValues.Get("CallerNumber"), 10, 64)
-
-	if err != nil {
-		http.Error(w, err.Error(), 400)
-	}
-
-	userMsg := &userMessage{
-		Extension:    extenstion,
-		Direction:    direction,
-		CallID:       callID,
-		CallerNumber: callerNumber,
-	}
-
-	output, err := json.Marshal(userMsg)
-	if err != nil {
-		http.Error(w, err.Error(), 500)
-		return
-	}
-
-	server.Broadcast(nil, neffos.Message{
-		To:        extenstionString,
-		Namespace: namespace,
-		Event:     showForm,
-		Body:      output,
-	})
-
-	data.InsertLogForForm(userMsg.Extension, userMsg.Direction, 1, userMsg.CallID, userMsg.CallerNumber)
-
-	w.WriteHeader(http.StatusOK)
-
 }
 
 func notificationHandler() {
@@ -273,11 +175,12 @@ func notificationHandler() {
 
 				server.Broadcast(nil, neffos.Message{
 					To:        extensionMessage,
-					Namespace: namespace,
-					Event:     "notification",
+					Namespace: variable.Agent,
+					Event:     variable.Notification,
 					Body:      output,
 				})
 			}
+
 		}
 	}
 
@@ -285,16 +188,8 @@ func notificationHandler() {
 
 }
 
-func getNotificationTimeHandeler() {
-
-	r, _ := data.GetNotificationTime()
-
-	gc.Set("NotifTime", r)
-
-}
-
 var events = neffos.Namespaces{
-	namespace: neffos.Events{
+	variable.Agent: neffos.Events{
 		neffos.OnNamespaceConnected: func(c *neffos.NSConn, msg neffos.Message) error {
 			log.Printf("[%s] connected to namespace [%s].", c, msg.Namespace)
 			return nil
