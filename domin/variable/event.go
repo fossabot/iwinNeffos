@@ -4,7 +4,10 @@ var (
 	//OnShowForm is event
 	// ایونتی برای یاز شدن فرم در تماس
 	OnShowForm = "_OnShowForm"
-	//Notification is event
+	//OnNotification is event
 	// ایونتی برای نمایش نوتیفیکیشن ها
-	Notification = "_OnNotification"
+	OnNotification = "_OnNotification"
+	//OnUpdateStatusNotification is event
+	//برای آپدیت کردن وضعیت نوتیفیکیشن
+	OnUpdateStatusNotification = "_OnUpdateStatusNotification"
 )
