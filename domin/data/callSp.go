@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	mssql "github.com/denisenkom/go-mssqldb"
+	"github.com/majidbigdeli/neffosAmi/domin/enum"
 	"github.com/majidbigdeli/neffosAmi/domin/model"
 )
 
@@ -83,4 +84,19 @@ func GetNotificationTime() (string, error) {
 	}
 
 	return notiftime, nil
+}
+
+//GetCallNotificationType ...
+func GetCallNotificationType() (enum.NotificationTypeEnum, error) {
+
+	var notificationType enum.NotificationTypeEnum
+
+	err := dbCore.QueryRowx("SELECT [Value] FROM ref.ConfigurationSetting WHERE [Key] = @Key",
+		sql.Named("Key", "NotificationType")).Scan(&notificationType)
+
+	if err != nil {
+		return 0, err
+	}
+
+	return notificationType, nil
 }
