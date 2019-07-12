@@ -28,14 +28,14 @@ func InsertLogForForm(extension, direction, typeSend int, callID, callerNumber i
 //گرفتن لیست نوتیفیکیشن ها
 // لیست اکستنشن ها را پاس می دهیم مدل IDTvp
 // در نتیجه مدل Notification میگیریم
-func GetNotificationList(ids []model.IDTvp) (*[]model.Notification, error) {
+func GetNotificationList(listExtentions []model.IDTvp) (*[]model.Notification, error) {
 	var poError int32
 	var poSTEP int32
 
-	if len(ids) > 0 {
+	if len(listExtentions) > 0 {
 		tvpType := mssql.TVP{
 			TypeName: "typ.BigIntIDType",
-			Value:    ids,
+			Value:    listExtentions,
 		}
 
 		var d []model.Notification
