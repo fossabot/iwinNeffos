@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net/http"
@@ -19,20 +20,21 @@ import (
 )
 
 var (
+	err     error
 	exePath string
 )
 
 func init() {
 
 	// برای ویندوز سرویس کردن اضافه کردم
-	pathExe, err := osext.ExecutableFolder()
+	exePath, err = osext.ExecutableFolder()
 
 	if err != nil {
 		panic(fmt.Errorf("fatal error ExecutableFolder: %s", err.Error()))
 	}
 
 	viper.SetConfigName("config")
-	viper.AddConfigPath(pathExe)
+	viper.AddConfigPath(exePath)
 	err = viper.ReadInConfig() // Find and read the config file
 	if err != nil {            // Handle errors reading the config file
 		panic(fmt.Errorf("fatal error config file: %s", err.Error()))
@@ -55,21 +57,28 @@ func main() {
 	serveMux.Handle("/echo", controller.Server)
 	//ای پی ای خانم وحید که در زمان پاسخ دادن تماس خانم وحید صدا می کند به صورت http
 	serveMux.Handle("/broadcast", http.HandlerFunc(controller.BroadcastHandler))
+
+	serveMux.Handle("/check", http.HandlerFunc(controller.Check))
+
 	handler := cors.Default().Handler(serveMux)
 
 	//run all jobs
-	go func() {
-		job.Jobs()
-	}()
 
+	job.Jobs()
+
+	controller.StartConnectionManager(context.TODO())
+
+	ff := path.Join(exePath, config.CertFile)
+	gg := path.Join(exePath, config.KeyFile)
 	//run server in http
 	go func() {
-		log.Printf("Listening on: %s\nPress CTRL/CMD+C to interrupt.", config.HTTPAddr)
-		log.Fatal(http.ListenAndServe(config.HTTPAddr, handler))
+		//run server in https
+		log.Printf("Listening on: %s\nPress CTRL/CMD+C to interrupt.", config.Addr)
+
+		log.Fatal(http.ListenAndServeTLS(config.Addr, ff, gg, handler))
 	}()
 
-	//run server in https
-	log.Printf("Listening on: %s\nPress CTRL/CMD+C to interrupt.", config.Addr)
-	log.Fatal(http.ListenAndServeTLS(config.Addr, path.Join(exePath, config.CertFile), path.Join(exePath, config.KeyFile), handler))
+	log.Printf("Listening on: %s\nPress CTRL/CMD+C to interrupt.", config.HTTPAddr)
+	log.Fatal(http.ListenAndServe(config.HTTPAddr, handler))
 
 }

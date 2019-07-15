@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
-	"sync"
 
 	"github.com/kataras/neffos"
 	"github.com/majidbigdeli/neffosAmi/domin/data"
@@ -13,8 +12,6 @@ import (
 	"github.com/majidbigdeli/neffosAmi/domin/model"
 	"github.com/majidbigdeli/neffosAmi/domin/variable"
 )
-
-var mutex = &sync.Mutex{}
 
 //BroadcastHandler ...
 func BroadcastHandler(w http.ResponseWriter, r *http.Request) {
@@ -47,7 +44,6 @@ func BroadcastHandler(w http.ResponseWriter, r *http.Request) {
 
 //NotificationHandler ...
 func NotificationHandler() {
-	mutex.Lock()
 
 	//listExtensionNumber , connectionID = extentionNumber
 	var listExtensionNumber []model.IDTvp
@@ -87,7 +83,5 @@ func NotificationHandler() {
 
 		}
 	}
-
-	mutex.Unlock()
 
 }
