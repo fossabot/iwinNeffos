@@ -13,6 +13,7 @@ import (
 )
 
 var (
+	//Server ...
 	Server           *neffos.Server
 	connections      = make(map[string]*neffos.Conn)
 	connectionIDs    []string
@@ -61,6 +62,7 @@ func NeffosServer() {
 	Server = server
 }
 
+//Check ....
 func Check(w http.ResponseWriter, r *http.Request) {
 	connectionID := r.URL.Query().Get("connectionId")
 
@@ -96,6 +98,7 @@ func Check(w http.ResponseWriter, r *http.Request) {
 
 }
 
+//StartConnectionManager  ....
 func StartConnectionManager(ctx context.Context) {
 	if ctx == nil {
 		ctx = context.TODO()
@@ -129,6 +132,7 @@ func StartConnectionManager(ctx context.Context) {
 	}()
 }
 
+//Response ...
 type Response struct {
 	Status bool
 }
