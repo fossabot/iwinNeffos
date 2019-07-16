@@ -1,7 +1,6 @@
 package controller
 
 import (
-	"context"
 	"encoding/json"
 	"log"
 	"net/http"
@@ -15,10 +14,7 @@ import (
 var (
 	//Server ...
 	Server           *neffos.Server
-	connections      = make(map[string]*neffos.Conn)
-	connectionIDs    []string
 	connID           = make(map[string]string)
-	addConnection    = make(chan *neffos.Conn)
 	removeConnection = make(chan *neffos.Conn)
 	mux              sync.Mutex
 )
@@ -39,23 +35,15 @@ func NeffosServer() {
 	}
 
 	server.OnConnect = func(c *neffos.Conn) error {
-
-		addConnection <- c
-
 		if c.WasReconnected() {
 			log.Printf("[%s] connection is a result of a client-side re-connection, with tries: %d", c.ID(), c.ReconnectTries)
 		}
-
 		log.Printf("[%s] connected to the server.", c)
-
-		// if returns non-nil error then it refuses the client to connect to the server.
 		return nil
 	}
 
 	server.OnDisconnect = func(c *neffos.Conn) {
-
 		removeConnection <- c
-
 		log.Printf("[%s] disconnected from the server.", c)
 	}
 
@@ -99,34 +87,12 @@ func Check(w http.ResponseWriter, r *http.Request) {
 }
 
 //StartConnectionManager  ....
-func StartConnectionManager(ctx context.Context) {
-	if ctx == nil {
-		ctx = context.TODO()
-	}
-
+func StartConnectionManager() {
 	go func() {
 		for {
 			select {
-			case c := <-addConnection:
-				connections[c.ID()] = c
-				connectionIDs = append(connectionIDs, c.ID())
 			case c := <-removeConnection:
-				delete(connections, c.ID())
 				delete(connID, c.ID())
-
-				if len(connectionIDs) == 1 {
-					connectionIDs = connectionIDs[0:0]
-				} else {
-					for i, n := 0, len(connectionIDs); i < n; i++ {
-						if connectionIDs[i] == c.ID() {
-							connectionIDs = append(connectionIDs[0:i], connectionIDs[i+1:]...)
-							break
-						}
-					}
-				}
-
-			case <-ctx.Done():
-				return
 			}
 		}
 	}()

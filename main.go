@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"log"
 	"net/http"
@@ -13,7 +12,6 @@ import (
 	"github.com/majidbigdeli/neffosAmi/controller"
 	"github.com/majidbigdeli/neffosAmi/domin/config"
 	"github.com/majidbigdeli/neffosAmi/domin/data"
-	"github.com/majidbigdeli/neffosAmi/job"
 
 	"github.com/rs/cors"
 	"github.com/spf13/viper"
@@ -64,9 +62,9 @@ func main() {
 
 	//run all jobs
 
-	job.Jobs()
+	//job.Jobs()
 
-	controller.StartConnectionManager(context.TODO())
+	controller.StartConnectionManager()
 
 	ff := path.Join(exePath, config.CertFile)
 	gg := path.Join(exePath, config.KeyFile)
