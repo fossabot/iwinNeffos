@@ -66,17 +66,14 @@ func main() {
 
 	controller.StartConnectionManager()
 
-	ff := path.Join(exePath, config.CertFile)
-	gg := path.Join(exePath, config.KeyFile)
-	//run server in http
 	go func() {
-		//run server in https
-		log.Printf("Listening on: %s\nPress CTRL/CMD+C to interrupt.", config.Addr)
-
-		log.Fatal(http.ListenAndServeTLS(config.Addr, ff, gg, handler))
+		log.Printf("Listening on: %s\nPress CTRL/CMD+C to interrupt.", config.HTTPAddr)
+		log.Fatal(http.ListenAndServe(config.HTTPAddr, handler))
 	}()
 
-	log.Printf("Listening on: %s\nPress CTRL/CMD+C to interrupt.", config.HTTPAddr)
-	log.Fatal(http.ListenAndServe(config.HTTPAddr, handler))
+	//run server in https
+	log.Printf("Listening on: %s\nPress CTRL/CMD+C to interrupt.", config.Addr)
+
+	log.Fatal(http.ListenAndServeTLS(config.Addr, path.Join(exePath, config.CertFile), path.Join(exePath, config.KeyFile), handler))
 
 }
