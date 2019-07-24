@@ -49,6 +49,45 @@ func GetNotificationList(listExtentions []model.IDTvp) (*[]model.Notification, e
 	return nil, nil
 }
 
+//GetExtentinByUserID ...
+func GetExtentinByUserID(userID int) (int, error) {
+	var extensionID *int
+
+	err := dbCore.Get(&extensionID, "SELECT ExtensionID FROM acc.Agent WHERE UserID = @UserId", sql.Named("UserId", userID))
+
+	if err != nil {
+		return 0, err
+	}
+
+	return *extensionID, nil
+
+}
+
+//GetUserIDByExtention ...
+func GetUserIDByExtention(extension string) (int, error) {
+	var userID *int
+
+	err := dbCore.Get(&userID, "SELECT a.UserID FROM acc.Agent a WITH(NOLOCK) INNER JOIN (SELECT ExtensionID ,Number FROM  core.Extension WITH(NOLOCK)) e ON e.ExtensionID = a.ExtensionID WHERE e.Number = @Extention", sql.Named("Extention", extension))
+
+	if err != nil {
+		return 0, err
+	}
+
+	return *userID, nil
+
+}
+
+//GetNotifByUserID ...
+func GetNotifByUserID(userID int) (*[]model.Notification, error) {
+
+	var d []model.Notification
+	err := dbData.Select(&d, "SELECT  Data,	Message,MessageType,NotificationId,Status,Type,UserId FROM message.Notification WHERE [UserId] = @UserId AND [Status] = @Status",
+		sql.Named("UserId", userID),
+		sql.Named("Status", 22710),
+	)
+	return &d, err
+}
+
 //UpdateNotification ...
 func UpdateNotification(id int) {
 	var poError int32

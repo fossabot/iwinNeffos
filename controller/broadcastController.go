@@ -72,9 +72,9 @@ func NotificationHandler() {
 		if len(*listNotification) > 0 {
 			for _, element := range *listNotification {
 				//extensionNumber = my unique connection ID
-				extensionNumber := strconv.Itoa(element.Number)
+				//extensionNumber := strconv.Itoa(element.Number)
 				Server.Broadcast(nil, neffos.Message{
-					To:        extensionNumber,
+					To:        "999",
 					Namespace: variable.Agent,
 					Event:     variable.OnNotification,
 					Body:      neffos.Marshal(element),

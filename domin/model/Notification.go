@@ -10,6 +10,4 @@ type Notification struct {
 	MessageType    int    `json:"MessageType" db:"MessageType"`
 	Data           string `json:"Data" db:"Data"`
 	Message        string `json:"Message" db:"Message"`
-	ExtensionID    int    `json:"ExtensionID" db:"ExtensionID"`
-	Number         int    `json:"Number" db:"Number"`
 }
