@@ -147,17 +147,13 @@ var events = neffos.Namespaces{
 		neffos.OnNamespaceConnected: func(c *neffos.NSConn, msg neffos.Message) error {
 			log.Printf("[%s] connected to namespace [%s].", c, msg.Namespace)
 			nsConn = c
-			to := c.Conn.ID()
-			id, err := data.GetUserIDByExtention(to)
 
-			if err != nil {
-				return nil
-			}
+			id, _ := strconv.Atoi(c.Conn.ID())
 			notification, err := data.GetNotifByUserID(id)
 			if err != nil {
 				return err
 			}
-			c.Conn.Server().Broadcast(nil, neffos.Message{
+			c.Conn.Write(neffos.Message{
 				Namespace: msg.Namespace,
 				Event:     "resiveErja",
 				To:        c.Conn.ID(),
@@ -180,12 +176,8 @@ var events = neffos.Namespaces{
 		},
 		"erja": func(c *neffos.NSConn, msg neffos.Message) error {
 
-			id, _ := strconv.Atoi(string(msg.Body))
-
-			extention, err := data.GetExtentinByUserID(id)
-			if err != nil {
-				return err
-			}
+			useriDs := string(msg.Body)
+			id, _ := strconv.Atoi(useriDs)
 
 			notification, err := data.GetNotifByUserID(id)
 
@@ -193,12 +185,10 @@ var events = neffos.Namespaces{
 				return err
 			}
 
-			ext := strconv.Itoa(extention)
-
-			c.Conn.Server().Broadcast(nil, neffos.Message{
+			c.Conn.Write(neffos.Message{
 				Namespace: msg.Namespace,
 				Event:     "resiveErja",
-				To:        ext,
+				To:        useriDs,
 				Body:      neffos.Marshal(notification),
 			})
 			return nil

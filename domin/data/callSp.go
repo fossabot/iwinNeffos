@@ -77,6 +77,20 @@ func GetUserIDByExtention(extension string) (int, error) {
 
 }
 
+//GetUserIDByExtentionNumber ...
+func GetUserIDByExtentionNumber(extension int) (int, error) {
+	var userID *int
+
+	err := dbCore.Get(&userID, "SELECT a.UserID FROM acc.Agent a WITH(NOLOCK) INNER JOIN (SELECT ExtensionID ,Number FROM  core.Extension WITH(NOLOCK)) e ON e.ExtensionID = a.ExtensionID WHERE e.Number = @Extention", sql.Named("Extention", extension))
+
+	if err != nil {
+		return 0, err
+	}
+
+	return *userID, nil
+
+}
+
 //GetNotifByUserID ...
 func GetNotifByUserID(userID int) (*[]model.Notification, error) {
 

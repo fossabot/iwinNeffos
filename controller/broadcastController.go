@@ -28,9 +28,16 @@ func BroadcastHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	extensionNumber := strconv.Itoa(userMsg.Extension)
+	userID, err := data.GetUserIDByExtentionNumber(userMsg.Extension)
+
+	if err != nil {
+		http.Error(w, "userId not found", 500)
+	}
+
+	userNumber := strconv.Itoa(userID)
+
 	nsConn.Conn.Write(neffos.Message{
-		To:        extensionNumber,
+		To:        userNumber,
 		Namespace: variable.Agent,
 		Event:     variable.OnShowForm,
 		Body:      neffos.Marshal(userMsg),
