@@ -29,8 +29,7 @@ func BroadcastHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	extensionNumber := strconv.Itoa(userMsg.Extension)
-
-	Server.Broadcast(nil, neffos.Message{
+	nsConn.Conn.Write(neffos.Message{
 		To:        extensionNumber,
 		Namespace: variable.Agent,
 		Event:     variable.OnShowForm,

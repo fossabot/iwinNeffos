@@ -57,6 +57,7 @@ func main() {
 	serveMux.Handle("/broadcast", http.HandlerFunc(controller.BroadcastHandler))
 
 	serveMux.Handle("/check", http.HandlerFunc(controller.Check))
+	serveMux.Handle("/disconnect", http.HandlerFunc(controller.Disconnect))
 
 	handler := cors.Default().Handler(serveMux)
 
