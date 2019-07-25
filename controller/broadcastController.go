@@ -34,7 +34,7 @@ func BroadcastHandler(w http.ResponseWriter, r *http.Request) {
 
 	userNumber := strconv.Itoa(userID)
 
-	nsConn.Conn.Server().Broadcast(nil, neffos.Message{
+	Server.Broadcast(nil, neffos.Message{
 		To:        userNumber,
 		Namespace: variable.Agent,
 		Event:     variable.OnShowForm,
@@ -49,21 +49,19 @@ func BroadcastHandler(w http.ResponseWriter, r *http.Request) {
 //NotificationHandler ....
 func NotificationHandler() {
 
-	for k, v := range connections {
-		if !v.IsClosed() {
-			//delete(connections, k)
-			id, _ := strconv.Atoi(k)
-			notification, err := data.GetNotifByUserID(id)
-			if err != nil {
-				return
-			}
-			nsConn.Conn.Server().Broadcast(nil, neffos.Message{
-				Namespace: variable.Agent,
-				Event:     "resiveErja",
-				To:        k,
-				Body:      neffos.Marshal(notification),
-			})
+	for k := range connections {
+		id, _ := strconv.Atoi(k)
+		notification, err := data.GetNotifByUserID(id)
+		if err != nil {
+			return
 		}
+		Server.Broadcast(nil, neffos.Message{
+			To:        k,
+			Namespace: variable.Agent,
+			Event:     "resiveErja",
+			Body:      neffos.Marshal(notification),
+		})
+
 	}
 
 }

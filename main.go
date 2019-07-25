@@ -57,16 +57,11 @@ func main() {
 	//ای پی ای خانم وحید که در زمان پاسخ دادن تماس خانم وحید صدا می کند به صورت http
 	serveMux.Handle("/broadcast", http.HandlerFunc(controller.BroadcastHandler))
 
-	serveMux.Handle("/check", http.HandlerFunc(controller.Check))
-	serveMux.Handle("/disconnect", http.HandlerFunc(controller.Disconnect))
-
 	handler := cors.Default().Handler(serveMux)
 
 	//run all jobs
 
 	job.Jobs()
-
-	controller.StartConnectionManager()
 
 	go func() {
 		log.Printf("Listening on: %s\nPress CTRL/CMD+C to interrupt.", config.HTTPAddr)
