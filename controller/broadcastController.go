@@ -36,7 +36,7 @@ func BroadcastHandler(w http.ResponseWriter, r *http.Request) {
 
 	userNumber := strconv.Itoa(userID)
 
-	nsConn.Conn.Write(neffos.Message{
+	nsConn.Conn.Server().Broadcast(nil, neffos.Message{
 		To:        userNumber,
 		Namespace: variable.Agent,
 		Event:     variable.OnShowForm,

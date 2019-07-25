@@ -153,7 +153,7 @@ var events = neffos.Namespaces{
 			if err != nil {
 				return err
 			}
-			c.Conn.Write(neffos.Message{
+			c.Conn.Server().Broadcast(nil, neffos.Message{
 				Namespace: msg.Namespace,
 				Event:     "resiveErja",
 				To:        c.Conn.ID(),
@@ -185,7 +185,7 @@ var events = neffos.Namespaces{
 				return err
 			}
 
-			c.Conn.Write(neffos.Message{
+			c.Conn.Server().Broadcast(nil, neffos.Message{
 				Namespace: msg.Namespace,
 				Event:     "resiveErja",
 				To:        useriDs,
