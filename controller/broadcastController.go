@@ -2,14 +2,12 @@ package controller
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"strconv"
 
 	"github.com/kataras/neffos"
 	"github.com/majidbigdeli/neffosAmi/domin/data"
 	"github.com/majidbigdeli/neffosAmi/domin/dto"
-	"github.com/majidbigdeli/neffosAmi/domin/model"
 	"github.com/majidbigdeli/neffosAmi/domin/variable"
 )
 
@@ -48,45 +46,23 @@ func BroadcastHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-//NotificationHandler ...
+//NotificationHandler ....
 func NotificationHandler() {
 
-	//listExtensionNumber , connectionID = extentionNumber
-	var listExtensionNumber []model.IDTvp
-
-	connections := Server.GetConnections()
-	for c := range connections {
-		var extentionNumber model.IDTvp
-		connectionID, err := strconv.Atoi(c)
-		if err != nil {
-			fmt.Println(err)
-		}
-		extentionNumber.ID = connectionID
-		listExtensionNumber = append(listExtensionNumber, extentionNumber)
-	}
-
-	//get list Notification from database with send list ExtensionNumber ;
-	// Attention { ExtensionNumber == list ConnectionID }
-	listNotification, err := data.GetNotificationList(listExtensionNumber)
-
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-
-	if listNotification != nil {
-		if len(*listNotification) > 0 {
-			for _, element := range *listNotification {
-				//extensionNumber = my unique connection ID
-				//extensionNumber := strconv.Itoa(element.Number)
-				Server.Broadcast(nil, neffos.Message{
-					To:        "999",
-					Namespace: variable.Agent,
-					Event:     variable.OnNotification,
-					Body:      neffos.Marshal(element),
-				})
+	for k, v := range connections {
+		if !v.IsClosed() {
+			//delete(connections, k)
+			id, _ := strconv.Atoi(k)
+			notification, err := data.GetNotifByUserID(id)
+			if err != nil {
+				return
 			}
-
+			nsConn.Conn.Server().Broadcast(nil, neffos.Message{
+				Namespace: variable.Agent,
+				Event:     "resiveErja",
+				To:        k,
+				Body:      neffos.Marshal(notification),
+			})
 		}
 	}
 

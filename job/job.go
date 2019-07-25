@@ -3,7 +3,6 @@ package job
 import (
 	"github.com/majidbigdeli/neffosAmi/controller"
 	"github.com/majidbigdeli/neffosAmi/domin/config"
-	"github.com/majidbigdeli/neffosAmi/domin/enum"
 	"github.com/robfig/cron"
 )
 
@@ -14,12 +13,5 @@ func Jobs() {
 	_ = c.AddFunc("@every "+config.NotifTime, func() {
 		controller.NotificationHandler()
 	})
-
-	if config.CallNotificationType == enum.CustomProject {
-		_ = c.AddFunc("@every "+config.NotifTime, func() {
-			controller.NotificationHandler()
-		})
-	}
-
 	c.Start()
 }

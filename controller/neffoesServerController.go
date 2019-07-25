@@ -130,7 +130,6 @@ func StartConnectionManager() {
 						delete(connections, k)
 					}
 				}
-
 			}
 		}
 	}()
@@ -147,18 +146,6 @@ var events = neffos.Namespaces{
 		neffos.OnNamespaceConnected: func(c *neffos.NSConn, msg neffos.Message) error {
 			log.Printf("[%s] connected to namespace [%s].", c, msg.Namespace)
 			nsConn = c
-
-			id, _ := strconv.Atoi(c.Conn.ID())
-			notification, err := data.GetNotifByUserID(id)
-			if err != nil {
-				return err
-			}
-			c.Conn.Server().Broadcast(nil, neffos.Message{
-				Namespace: msg.Namespace,
-				Event:     "resiveErja",
-				To:        c.Conn.ID(),
-				Body:      neffos.Marshal(notification),
-			})
 			return nil
 		},
 

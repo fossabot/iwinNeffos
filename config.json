@@ -41,6 +41,6 @@
 
 
   "Notification":{
-    "Time": "30m"
+    "Time": "5s"
   }
 }
