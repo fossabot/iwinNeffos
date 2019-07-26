@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net/http"
@@ -59,7 +60,7 @@ func main() {
 
 	handler := cors.Default().Handler(serveMux)
 
-	//run all jobs
+	controller.StartConnectionManager(context.TODO())
 
 	job.Jobs()
 
