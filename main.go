@@ -3,11 +3,12 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/robfig/cron"
 	"log"
 	"net/http"
 	"path"
 	"strconv"
+
+	"github.com/robfig/cron"
 
 	"github.com/kataras/neffos"
 	"github.com/kataras/neffos/gobwas"
@@ -27,20 +28,16 @@ import (
 )
 
 var (
-	err              error
-	exePath          string
-	server           *neffos.Server
+	err     error
+	exePath string
+	server  *neffos.Server
 )
 
 func init() {
-
-	// برای ویندوز سرویس کردن اضافه کردم
 	exePath, err = osext.ExecutableFolder()
-
 	if err != nil {
 		panic(fmt.Errorf("fatal error ExecutableFolder: %s", err.Error()))
 	}
-
 	viper.SetConfigName("config")
 	viper.AddConfigPath(exePath)
 	err = viper.ReadInConfig() // Find and read the config file
@@ -48,7 +45,6 @@ func init() {
 		panic(fmt.Errorf("fatal error config file: %s", err.Error()))
 	}
 
-	// باز کردن کانکشن به دیتابیس
 	data.GetDB()
 	data.GetDBData()
 	data.GetDBCore()
@@ -57,19 +53,16 @@ func init() {
 
 var events = neffos.Namespaces{
 	variable.Agent: neffos.Events{
-		// ایونت متصل شدن به یک فضای نام
 		neffos.OnNamespaceConnected: func(c *neffos.NSConn, msg neffos.Message) error {
 			log.Printf("[%s] connected to namespace [%s].", c, msg.Namespace)
 			return nil
 		},
 
-		// دیسکانکت شدن از فضای نام
 		neffos.OnNamespaceDisconnect: func(c *neffos.NSConn, msg neffos.Message) error {
 			log.Printf("[%s] disconnected from namespace [%s].", c, msg.Namespace)
 			return nil
 		},
 
-		// ایونت آپدیت کردن وضعیت اکستنشن
 		variable.OnUpdateStatusNotification: func(c *neffos.NSConn, msg neffos.Message) error {
 			id, _ := strconv.Atoi(string(msg.Body))
 			data.UpdateNotification(id)
@@ -140,7 +133,7 @@ func broadcastHandler(ctx *fasthttp.RequestCtx) {
 		ctx.SetStatusCode(fasthttp.StatusBadRequest)
 		return
 	}
-	err = json.Unmarshal(body,userMsg)
+	err = json.Unmarshal(body, &userMsg)
 	if err != nil {
 		data.SetNeffosError1(model.NeffosError{
 			SocketID: "",
