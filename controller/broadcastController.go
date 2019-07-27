@@ -49,23 +49,16 @@ func BroadcastHandler(w http.ResponseWriter, r *http.Request) {
 //NotificationHandler ....
 func NotificationHandler() {
 
-	for _, cID := range connectionIDs {
-		id, err := strconv.Atoi(cID)
-		if err != nil {
-			return
-		}
+	notification, err := data.GetNotifByUserID()
 
-		notification, err := data.GetNotifByUserID(id)
-		if err != nil {
-			return
-		}
-		Server.Broadcast(nil, neffos.Message{
-			To:        cID,
-			Namespace: variable.Agent,
-			Event:     "resiveErja",
-			Body:      neffos.Marshal(notification),
-		})
-
+	if err != nil {
+		return
 	}
+	Server.Broadcast(nil, neffos.Message{
+		To:        "",
+		Namespace: variable.Agent,
+		Event:     "resiveErja",
+		Body:      neffos.Marshal(notification),
+	})
 
 }
