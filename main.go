@@ -1,27 +1,35 @@
 package main
 
 import (
-	"context"
+	"encoding/json"
 	"fmt"
+	"github.com/robfig/cron"
 	"log"
 	"net/http"
 	"path"
+	"strconv"
+
+	"github.com/kataras/neffos"
+	"github.com/kataras/neffos/gobwas"
+	"github.com/valyala/fasthttp"
 
 	_ "github.com/denisenkom/go-mssqldb"
 	_ "github.com/kardianos/minwinsvc"
 	"github.com/kardianos/osext"
-	"github.com/majidbigdeli/neffosAmi/controller"
 	"github.com/majidbigdeli/neffosAmi/domin/config"
 	"github.com/majidbigdeli/neffosAmi/domin/data"
-	"github.com/majidbigdeli/neffosAmi/job"
+	"github.com/majidbigdeli/neffosAmi/domin/dto"
+	"github.com/majidbigdeli/neffosAmi/domin/model"
+	"github.com/majidbigdeli/neffosAmi/domin/variable"
 
 	"github.com/rs/cors"
 	"github.com/spf13/viper"
 )
 
 var (
-	err     error
-	exePath string
+	err              error
+	exePath          string
+	server           *neffos.Server
 )
 
 func init() {
@@ -47,31 +55,143 @@ func init() {
 	config.GetConfig()
 }
 
-func main() {
+var events = neffos.Namespaces{
+	variable.Agent: neffos.Events{
+		// ایونت متصل شدن به یک فضای نام
+		neffos.OnNamespaceConnected: func(c *neffos.NSConn, msg neffos.Message) error {
+			log.Printf("[%s] connected to namespace [%s].", c, msg.Namespace)
+			return nil
+		},
 
-	controller.NeffosServer()
+		// دیسکانکت شدن از فضای نام
+		neffos.OnNamespaceDisconnect: func(c *neffos.NSConn, msg neffos.Message) error {
+			log.Printf("[%s] disconnected from namespace [%s].", c, msg.Namespace)
+			return nil
+		},
+
+		// ایونت آپدیت کردن وضعیت اکستنشن
+		variable.OnUpdateStatusNotification: func(c *neffos.NSConn, msg neffos.Message) error {
+			id, _ := strconv.Atoi(string(msg.Body))
+			data.UpdateNotification(id)
+			return nil
+		},
+	},
+}
+
+func main() {
+	server = neffos.New(gobwas.DefaultUpgrader, events)
+	server.IDGenerator = func(w http.ResponseWriter, r *http.Request) string {
+		if userID := r.Header.Get("userID"); userID != "" {
+			return userID
+		}
+		return neffos.DefaultIDGenerator(w, r)
+	}
+	server.OnUpgradeError = func(err error) {
+		log.Printf("ERROR: %v", err)
+	}
+	server.OnConnect = func(c *neffos.Conn) error {
+		if c.WasReconnected() {
+			log.Printf("[%s] connection is a result of a client-side re-connection, with tries: %d", c.ID(), c.ReconnectTries)
+		}
+		log.Printf("[%s] connected to the server.", c)
+		return nil
+	}
+	server.OnDisconnect = func(c *neffos.Conn) {
+		log.Printf("[%s] disconnected from the server.", c)
+	}
 
 	serveMux := http.NewServeMux()
-	//websocket Handler ...
-	// panel be sorate https api echo ra seda mizanad
-	serveMux.Handle("/echo", controller.Server)
-	//ای پی ای خانم وحید که در زمان پاسخ دادن تماس خانم وحید صدا می کند به صورت http
-	serveMux.Handle("/broadcast", http.HandlerFunc(controller.BroadcastHandler))
-
+	serveMux.Handle("/echo", server)
+	//serveMux.Handle("/broadcast", http.HandlerFunc(broadcastHandler))
 	handler := cors.Default().Handler(serveMux)
-
-	controller.StartConnectionManager(context.TODO())
-
-	job.Jobs()
+	m := func(ctx *fasthttp.RequestCtx) {
+		switch string(ctx.Path()) {
+		case "/broadcast":
+			broadcastHandler(ctx)
+		default:
+			ctx.Error("not found", fasthttp.StatusNotFound)
+		}
+	}
+	c := cron.New()
+	_ = c.AddFunc("@every "+config.NotifTime, func() {
+		notificationHandler()
+	})
+	c.Start()
 
 	go func() {
 		log.Printf("Listening on: %s\nPress CTRL/CMD+C to interrupt.", config.HTTPAddr)
-		log.Fatal(http.ListenAndServe(config.HTTPAddr, handler))
+		log.Fatal(fasthttp.ListenAndServe(config.HTTPAddr, m))
 	}()
-
 	//run server in https
 	log.Printf("Listening on: %s\nPress CTRL/CMD+C to interrupt.", config.Addr)
-
 	log.Fatal(http.ListenAndServeTLS(config.Addr, path.Join(exePath, config.CertFile), path.Join(exePath, config.KeyFile), handler))
 
+}
+
+func broadcastHandler(ctx *fasthttp.RequestCtx) {
+	var userMsg dto.FormDto
+	body := ctx.PostBody()
+	if body == nil {
+		data.SetNeffosError1(model.NeffosError{
+			SocketID: "",
+			Message:  "Please send a request body",
+			Body:     "",
+		})
+		ctx.SetStatusCode(fasthttp.StatusBadRequest)
+		return
+	}
+	err = json.Unmarshal(body,userMsg)
+	if err != nil {
+		data.SetNeffosError1(model.NeffosError{
+			SocketID: "",
+			Message:  err.Error(),
+			Body:     string(body),
+		})
+		ctx.SetStatusCode(fasthttp.StatusBadRequest)
+		return
+	}
+	userID, err := data.GetUserIDByExtentionNumber(userMsg.Extension)
+	if err != nil {
+		data.SetNeffosError1(model.NeffosError{
+			SocketID: "",
+			Message:  err.Error(),
+			Body:     string(body),
+		})
+		ctx.SetStatusCode(fasthttp.StatusBadRequest)
+		return
+	}
+	if userID == "" {
+		data.SetNeffosError1(model.NeffosError{
+			SocketID: "",
+			Message:  "userId is empty",
+			Body:     string(body),
+		})
+		ctx.SetStatusCode(fasthttp.StatusBadRequest)
+		return
+	}
+	server.Broadcast(nil, neffos.Message{
+		To:        userID,
+		Namespace: "default",
+		Event:     "showForm",
+		Body:      body,
+	})
+	data.InsertLogForForm(userMsg.Extension, userMsg.Direction, 1, userMsg.CallID, userMsg.CallerNumber)
+	ctx.SetStatusCode(fasthttp.StatusOK)
+}
+
+func notificationHandler() {
+	notification, err := data.GetNotif()
+	if err != nil {
+		data.SetNeffosError1(model.NeffosError{
+			SocketID: "",
+			Message:  err.Error(),
+			Body:     "",
+		})
+		return
+	}
+	server.Broadcast(nil, neffos.Message{
+		Namespace: "default",
+		Event:     "resiveErja",
+		Body:      neffos.Marshal(notification),
+	})
 }

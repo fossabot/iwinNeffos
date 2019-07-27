@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	mssql "github.com/denisenkom/go-mssqldb"
-	"github.com/majidbigdeli/neffosAmi/domin/enum"
 	"github.com/majidbigdeli/neffosAmi/domin/model"
 )
 
@@ -64,30 +63,30 @@ func GetExtentinByUserID(userID int) (int, error) {
 }
 
 //GetUserIDByExtention ...
-func GetUserIDByExtention(extension string) (int, error) {
-	var userID *int
+func GetUserIDByExtention(extension string) (string, error) {
+	var userID string
 
 	err := dbCore.Get(&userID, "SELECT a.UserID FROM acc.Agent a WITH(NOLOCK) INNER JOIN (SELECT ExtensionID ,Number FROM  core.Extension WITH(NOLOCK)) e ON e.ExtensionID = a.ExtensionID WHERE e.Number = @Extention", sql.Named("Extention", extension))
 
 	if err != nil {
-		return 0, err
+		return "", err
 	}
 
-	return *userID, nil
+	return userID, nil
 
 }
 
 //GetUserIDByExtentionNumber ...
-func GetUserIDByExtentionNumber(extension int) (int, error) {
-	var userID *int
+func GetUserIDByExtentionNumber(extension int) (string, error) {
+	var userID string
 
-	err := dbCore.Get(&userID, "SELECT a.UserID FROM acc.Agent a WITH(NOLOCK) INNER JOIN (SELECT ExtensionID ,Number FROM  core.Extension WITH(NOLOCK)) e ON e.ExtensionID = a.ExtensionID WHERE e.Number = @Extention", sql.Named("Extention", extension))
+	err := dbCore.QueryRowx("[app].[uspGetUserIdByExtension1]", sql.Named("PI_ExtensionNumber", extension)).Scan(&userID)
 
 	if err != nil {
-		return 0, err
+		return "", err
 	}
 
-	return *userID, nil
+	return userID, nil
 
 }
 
@@ -99,6 +98,17 @@ func GetNotifByUserID(userID int) (*[]model.Notification, error) {
 		sql.Named("UserId", userID),
 		sql.Named("Status", 22710),
 	)
+	return &d, err
+}
+
+//GetNotif ...
+func GetNotif() (*[]model.Notification, error) {
+
+	var d []model.Notification
+	err := dbData.Select(&d, "SELECT  Data,	Message,MessageType,NotificationId,Status,Type,UserId FROM message.Notification WHERE [Status] = @Status",
+		sql.Named("Status", 22710),
+	)
+
 	return &d, err
 }
 
@@ -121,6 +131,20 @@ func UpdateNotification(id int) {
 	}
 }
 
+//SetNeffosError1 ....
+func SetNeffosError1(neffosError model.NeffosError) {
+	_, err := dbData.Exec("app.uspUpdateNotification1",
+		sql.Named("PI_SocketId", neffosError.SocketID),
+		sql.Named("PI_Message", neffosError.Message),
+		sql.Named("PI_Body", neffosError.Body),
+	)
+
+	if err != nil {
+		fmt.Printf(err.Error())
+	}
+
+}
+
 //GetNotificationTime ....
 func GetNotificationTime() (string, error) {
 	var notiftime string
@@ -139,17 +163,4 @@ func GetNotificationTime() (string, error) {
 	return notiftime, nil
 }
 
-//GetCallNotificationType ...
-func GetCallNotificationType() (enum.NotificationTypeEnum, error) {
 
-	var notificationType enum.NotificationTypeEnum
-
-	err := dbCore.QueryRowx("SELECT [Value] FROM ref.ConfigurationSetting WHERE [Key] = @Key",
-		sql.Named("Key", "NotificationType")).Scan(&notificationType)
-
-	if err != nil {
-		return 0, err
-	}
-
-	return notificationType, nil
-}
