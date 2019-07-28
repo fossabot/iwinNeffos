@@ -83,7 +83,7 @@ func main() {
 	}
 
 	// this pool will use our ConnFunc for all connections it creates
-	pool, err := radix.NewPool("tcp", "10.1.10.33:6379", 100, radix.PoolConnFunc(customConnFunc("tcp", "10.1.10.33:6379")))
+	pool, err := radix.NewPool("tcp", "10.1.10.33:6379", 100, radix.PoolConnFunc(customConnFunc))
 
 	if err != nil {
 		panic(err)
