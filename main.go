@@ -72,6 +72,9 @@ var events = neffos.Namespaces{
 }
 
 func main() {
+
+
+	
 	server = neffos.New(gobwas.DefaultUpgrader, events)
 	server.IDGenerator = func(w http.ResponseWriter, r *http.Request) string {
 		if userID := r.Header.Get("userID"); userID != "" {
@@ -118,7 +121,6 @@ func main() {
 	//run server in https
 	log.Printf("Listening on: %s\nPress CTRL/CMD+C to interrupt.", config.Addr)
 	log.Fatal(http.ListenAndServeTLS(config.Addr, path.Join(exePath, config.CertFile), path.Join(exePath, config.KeyFile), handler))
-
 }
 
 func broadcastHandler(ctx *fasthttp.RequestCtx) {
