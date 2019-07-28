@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"path"
 	"strconv"
+	"time"
 
 	"github.com/mediocregopher/radix/v3"
 	"github.com/robfig/cron"
@@ -74,8 +75,16 @@ var events = neffos.Namespaces{
 
 func main() {
 
-	pool, err := radix.NewPool("tcp", "10.1.10.33:6379", 1000)
-	pool.Do(radix.Cmd())
+	customConnFunc := func(network, addr string) (radix.Conn, error) {
+		return radix.Dial(network, addr,
+			radix.DialTimeout(1*time.Minute),
+			radix.DialAuthPass("iwinrds"),
+		)
+	}
+
+	// this pool will use our ConnFunc for all connections it creates
+	pool, err := radix.NewPool("tcp", "10.1.10.33:6379", 100, radix.PoolConnFunc(customConnFunc("tcp", "10.1.10.33:6379")))
+
 	if err != nil {
 		panic(err)
 	}
