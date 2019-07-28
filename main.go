@@ -182,6 +182,11 @@ func notificationHandler() {
 		})
 		return
 	}
+
+	if len(*notification) == 0 {
+		return
+	}
+
 	server.Broadcast(nil, neffos.Message{
 		Namespace: "default",
 		Event:     "resiveErja",
