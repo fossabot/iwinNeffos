@@ -8,6 +8,7 @@ import (
 	"path"
 	"strconv"
 
+	"github.com/mediocregopher/radix/v3"
 	"github.com/robfig/cron"
 
 	"github.com/kataras/neffos"
@@ -73,8 +74,12 @@ var events = neffos.Namespaces{
 
 func main() {
 
+	pool, err := radix.NewPool("tcp", "10.1.10.33:6379", 1000)
+	pool.Do(radix.Cmd())
+	if err != nil {
+		panic(err)
+	}
 
-	
 	server = neffos.New(gobwas.DefaultUpgrader, events)
 	server.IDGenerator = func(w http.ResponseWriter, r *http.Request) string {
 		if userID := r.Header.Get("userID"); userID != "" {
