@@ -1,4 +1,4 @@
-package main
+ackage main
 
 import (
 	"encoding/json"
@@ -33,6 +33,7 @@ var (
 	err     error
 	exePath string
 	server  *neffos.Server
+	pool    *radix.Pool
 )
 
 func init() {
@@ -88,6 +89,13 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+
+	var msg string
+	err = pool.Do(radix.Cmd(&msg, "PING"))
+	if err != nil {
+		panic(err)
+	}
+	fmt.Print("Redis Connected :", msg)
 
 	server = neffos.New(gobwas.DefaultUpgrader, events)
 	server.IDGenerator = func(w http.ResponseWriter, r *http.Request) string {
