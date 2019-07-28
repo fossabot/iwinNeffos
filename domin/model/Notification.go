@@ -18,3 +18,9 @@ type NeffosError struct {
 	Message  string `json:"message" db:"message"`
 	Body     string `json:"body" db:"body"`
 }
+
+// ExtUser ...
+type ExtUser struct {
+	Number string `json:"Number" db:"Number"`
+	UserID string `json:"UserID" db:"UserID"`
+}

@@ -92,7 +92,6 @@ func GetUserIDByExtentionNumber(extension int) (string, error) {
 
 //GetNotifByUserID ...
 func GetNotifByUserID(userID int) (*[]model.Notification, error) {
-
 	var d []model.Notification
 	err := dbData.Select(&d, "SELECT  Data,	Message,MessageType,NotificationId,Status,Type,UserId FROM message.Notification WHERE [UserId] = @UserId AND [Status] = @Status",
 		sql.Named("UserId", userID),
@@ -110,6 +109,14 @@ func GetNotif() (*[]model.Notification, error) {
 	)
 
 	return &d, err
+}
+
+//GetExtentionUser ...
+func GetExtentionUser() ([]model.ExtUser, error) {
+	var extUser []model.ExtUser
+	err := dbCore.Select(&extUser, "[app].[UspGetExtentionUser1]")
+	return extUser, err
+
 }
 
 //UpdateNotification ...
@@ -162,5 +169,3 @@ func GetNotificationTime() (string, error) {
 
 	return notiftime, nil
 }
-
-

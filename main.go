@@ -1,4 +1,4 @@
-ackage main
+package main
 
 import (
 	"encoding/json"
@@ -34,6 +34,7 @@ var (
 	exePath string
 	server  *neffos.Server
 	pool    *radix.Pool
+	prefex  string
 )
 
 func init() {
@@ -52,6 +53,7 @@ func init() {
 	data.GetDBData()
 	data.GetDBCore()
 	config.GetConfig()
+	prefex = "Neffos_"
 }
 
 var events = neffos.Namespaces{
@@ -83,7 +85,6 @@ func main() {
 		)
 	}
 
-	// this pool will use our ConnFunc for all connections it creates
 	pool, err := radix.NewPool("tcp", "10.1.10.33:6379", 100, radix.PoolConnFunc(customConnFunc))
 
 	if err != nil {
@@ -95,7 +96,9 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	fmt.Print("Redis Connected :", msg)
+	fmt.Printf("Redis Connected :[%s]\n", msg)
+
+	setExtentionInRedis()
 
 	server = neffos.New(gobwas.DefaultUpgrader, events)
 	server.IDGenerator = func(w http.ResponseWriter, r *http.Request) string {
@@ -120,7 +123,7 @@ func main() {
 
 	serveMux := http.NewServeMux()
 	serveMux.Handle("/echo", server)
-	//serveMux.Handle("/broadcast", http.HandlerFunc(broadcastHandler))
+
 	handler := cors.Default().Handler(serveMux)
 	m := func(ctx *fasthttp.RequestCtx) {
 		switch string(ctx.Path()) {
@@ -134,6 +137,11 @@ func main() {
 	_ = c.AddFunc("@every "+config.NotifTime, func() {
 		notificationHandler()
 	})
+
+	_ = c.AddFunc("@every 10m", func() {
+		setExtentionInRedis()
+	})
+
 	c.Start()
 
 	go func() {
@@ -148,15 +156,7 @@ func main() {
 func broadcastHandler(ctx *fasthttp.RequestCtx) {
 	var userMsg dto.FormDto
 	body := ctx.PostBody()
-	if body == nil {
-		data.SetNeffosError1(model.NeffosError{
-			SocketID: "",
-			Message:  "Please send a request body",
-			Body:     "",
-		})
-		ctx.SetStatusCode(fasthttp.StatusBadRequest)
-		return
-	}
+
 	err = json.Unmarshal(body, &userMsg)
 	if err != nil {
 		data.SetNeffosError1(model.NeffosError{
@@ -167,7 +167,11 @@ func broadcastHandler(ctx *fasthttp.RequestCtx) {
 		ctx.SetStatusCode(fasthttp.StatusBadRequest)
 		return
 	}
-	userID, err := data.GetUserIDByExtentionNumber(userMsg.Extension)
+
+	key := fmt.Sprintf("%s%d", prefex, userMsg.Extension)
+	var userID string
+	err := pool.Do(radix.Cmd(&userID, "GET", key))
+
 	if err != nil {
 		data.SetNeffosError1(model.NeffosError{
 			SocketID: "",
@@ -177,6 +181,7 @@ func broadcastHandler(ctx *fasthttp.RequestCtx) {
 		ctx.SetStatusCode(fasthttp.StatusBadRequest)
 		return
 	}
+
 	if userID == "" {
 		data.SetNeffosError1(model.NeffosError{
 			SocketID: "",
@@ -192,7 +197,7 @@ func broadcastHandler(ctx *fasthttp.RequestCtx) {
 		Event:     "showForm",
 		Body:      body,
 	})
-	data.InsertLogForForm(userMsg.Extension, userMsg.Direction, 1, userMsg.CallID, userMsg.CallerNumber)
+	//data.InsertLogForForm(userMsg.Extension, userMsg.Direction, 1, userMsg.CallID, userMsg.CallerNumber)
 	ctx.SetStatusCode(fasthttp.StatusOK)
 }
 
@@ -216,4 +221,21 @@ func notificationHandler() {
 		Event:     "resiveErja",
 		Body:      neffos.Marshal(notification),
 	})
+}
+
+func setExtentionInRedis() {
+	extUser, err := data.GetExtentionUser()
+	if err != nil {
+		return
+	}
+	if len(extUser) == 0 {
+		return
+	}
+
+	// value only
+	for _, v := range extUser {
+		key := fmt.Sprintf("%s%s", prefex, v.Number)
+		pool.Do(radix.Cmd(nil, "SET", key, v.UserID))
+	}
+
 }
