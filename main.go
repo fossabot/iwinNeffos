@@ -151,7 +151,7 @@ func broadcastHandler(ctx *fasthttp.RequestCtx) {
 	ctx.SetStatusCode(fasthttp.StatusOK)
 }
 
-func getBroadcastHandler() {
+func getBroadcastHandler(w http.ResponseWriter, r *http.Request) {
 	mutex.Lock()
 	defer mutex.Unlock()
 
