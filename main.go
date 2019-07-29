@@ -1,17 +1,18 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
 	"path"
 	"strconv"
+	"sync"
 
 	"github.com/mediocregopher/radix/v3"
 	"github.com/robfig/cron"
 
 	"github.com/kataras/neffos"
+	"github.com/kataras/neffos/gobwas"
 	"github.com/valyala/fasthttp"
 
 	_ "github.com/denisenkom/go-mssqldb"
@@ -23,15 +24,18 @@ import (
 	"github.com/majidbigdeli/neffosAmi/domin/model"
 	"github.com/majidbigdeli/neffosAmi/domin/variable"
 
+	"github.com/rs/cors"
 	"github.com/spf13/viper"
 )
 
 var (
-	err     error
-	exePath string
-	server  *neffos.Server
-	pool    *radix.Pool
-	prefex  string
+	err      error
+	exePath  string
+	server   *neffos.Server
+	pool     *radix.Pool
+	prefex   string
+	formList = make(map[int][]byte)
+	mutex    = &sync.Mutex{}
 )
 
 func init() {
@@ -75,6 +79,32 @@ var events = neffos.Namespaces{
 
 func main() {
 
+	server = neffos.New(gobwas.DefaultUpgrader, events)
+	server.IDGenerator = func(w http.ResponseWriter, r *http.Request) string {
+		if userID := r.Header.Get("userID"); userID != "" {
+			return userID
+		}
+		return neffos.DefaultIDGenerator(w, r)
+	}
+	server.OnUpgradeError = func(err error) {
+		log.Printf("ERROR: %v", err)
+	}
+	server.OnConnect = func(c *neffos.Conn) error {
+		if c.WasReconnected() {
+			log.Printf("[%s] connection is a result of a client-side re-connection, with tries: %d", c.ID(), c.ReconnectTries)
+		}
+		log.Printf("[%s] connected to the server.", c)
+		return nil
+	}
+	server.OnDisconnect = func(c *neffos.Conn) {
+		log.Printf("[%s] disconnected from the server.", c)
+	}
+
+	serveMux := http.NewServeMux()
+	serveMux.Handle("/echo", server)
+	serveMux.Handle("/getBroadCast", getBroadcastHandler)
+
+	handler := cors.Default().Handler(serveMux)
 	m := func(ctx *fasthttp.RequestCtx) {
 		switch string(ctx.Path()) {
 		case "/broadcast":
@@ -83,6 +113,7 @@ func main() {
 			ctx.Error("not found", fasthttp.StatusNotFound)
 		}
 	}
+
 	c := cron.New()
 	_ = c.AddFunc("@every "+config.NotifTime, func() {
 		notificationHandler()
@@ -106,8 +137,7 @@ func main() {
 func broadcastHandler(ctx *fasthttp.RequestCtx) {
 	var userMsg dto.FormDto
 	body := ctx.PostBody()
-
-	err = json.Unmarshal(body, &userMsg)
+	err := userMsg.UnmarshalBinary(body)
 	if err != nil {
 		data.SetNeffosError1(model.NeffosError{
 			SocketID: "",
@@ -117,38 +147,14 @@ func broadcastHandler(ctx *fasthttp.RequestCtx) {
 		ctx.SetStatusCode(fasthttp.StatusBadRequest)
 		return
 	}
-
-	key := fmt.Sprintf("%s%d", prefex, userMsg.Extension)
-	var userID string
-	err := pool.Do(radix.Cmd(&userID, "GET", key))
-
-	if err != nil {
-		data.SetNeffosError1(model.NeffosError{
-			SocketID: "",
-			Message:  err.Error(),
-			Body:     string(body),
-		})
-		ctx.SetStatusCode(fasthttp.StatusBadRequest)
-		return
-	}
-
-	if userID == "" {
-		data.SetNeffosError1(model.NeffosError{
-			SocketID: "",
-			Message:  "userId is empty",
-			Body:     string(body),
-		})
-		ctx.SetStatusCode(fasthttp.StatusBadRequest)
-		return
-	}
-	server.Broadcast(nil, neffos.Message{
-		To:        userID,
-		Namespace: "default",
-		Event:     "showForm",
-		Body:      body,
-	})
-	//data.InsertLogForForm(userMsg.Extension, userMsg.Direction, 1, userMsg.CallID, userMsg.CallerNumber)
+	formList[userMsg.Extension] = body
 	ctx.SetStatusCode(fasthttp.StatusOK)
+}
+
+func getBroadcastHandler() {
+	mutex.Lock()
+	defer mutex.Unlock()
+
 }
 
 func notificationHandler() {
