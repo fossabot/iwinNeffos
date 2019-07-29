@@ -7,13 +7,11 @@ import (
 	"net/http"
 	"path"
 	"strconv"
-	"time"
 
 	"github.com/mediocregopher/radix/v3"
 	"github.com/robfig/cron"
 
 	"github.com/kataras/neffos"
-	"github.com/kataras/neffos/gobwas"
 	"github.com/valyala/fasthttp"
 
 	_ "github.com/denisenkom/go-mssqldb"
@@ -25,7 +23,6 @@ import (
 	"github.com/majidbigdeli/neffosAmi/domin/model"
 	"github.com/majidbigdeli/neffosAmi/domin/variable"
 
-	"github.com/rs/cors"
 	"github.com/spf13/viper"
 )
 
@@ -78,55 +75,6 @@ var events = neffos.Namespaces{
 
 func main() {
 
-	customConnFunc := func(network, addr string) (radix.Conn, error) {
-		return radix.Dial(network, addr,
-			radix.DialTimeout(1*time.Minute),
-			radix.DialAuthPass("iwinrds"),
-		)
-	}
-
-	pool, err = radix.NewPool("tcp", "10.1.10.33:6379", 100, radix.PoolConnFunc(customConnFunc))
-
-	if err != nil {
-		panic(err)
-	}
-
-	var msg string
-	err = pool.Do(radix.Cmd(&msg, "PING"))
-	if err != nil {
-		panic(err)
-	}
-	fmt.Printf("Redis Connected :[%s]\n", msg)
-
-	pool.Do(radix.Cmd(nil, "SET", "ff", "eee"))
-
-	setExtentionInRedis()
-
-	server = neffos.New(gobwas.DefaultUpgrader, events)
-	server.IDGenerator = func(w http.ResponseWriter, r *http.Request) string {
-		if userID := r.Header.Get("userID"); userID != "" {
-			return userID
-		}
-		return neffos.DefaultIDGenerator(w, r)
-	}
-	server.OnUpgradeError = func(err error) {
-		log.Printf("ERROR: %v", err)
-	}
-	server.OnConnect = func(c *neffos.Conn) error {
-		if c.WasReconnected() {
-			log.Printf("[%s] connection is a result of a client-side re-connection, with tries: %d", c.ID(), c.ReconnectTries)
-		}
-		log.Printf("[%s] connected to the server.", c)
-		return nil
-	}
-	server.OnDisconnect = func(c *neffos.Conn) {
-		log.Printf("[%s] disconnected from the server.", c)
-	}
-
-	serveMux := http.NewServeMux()
-	serveMux.Handle("/echo", server)
-
-	handler := cors.Default().Handler(serveMux)
 	m := func(ctx *fasthttp.RequestCtx) {
 		switch string(ctx.Path()) {
 		case "/broadcast":
