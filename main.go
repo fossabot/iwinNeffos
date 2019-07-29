@@ -1,10 +1,11 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"net/http"
-	"path"
 	"strconv"
 	"sync"
 
@@ -13,7 +14,6 @@ import (
 
 	"github.com/kataras/neffos"
 	"github.com/kataras/neffos/gobwas"
-	"github.com/valyala/fasthttp"
 
 	_ "github.com/denisenkom/go-mssqldb"
 	_ "github.com/kardianos/minwinsvc"
@@ -24,7 +24,6 @@ import (
 	"github.com/majidbigdeli/neffosAmi/domin/model"
 	"github.com/majidbigdeli/neffosAmi/domin/variable"
 
-	"github.com/rs/cors"
 	"github.com/spf13/viper"
 )
 
@@ -79,6 +78,12 @@ var events = neffos.Namespaces{
 
 func main() {
 
+	defer func() {
+		if err := recover(); err != nil {
+			fmt.Println(err)
+		}
+	}()
+
 	server = neffos.New(gobwas.DefaultUpgrader, events)
 	server.IDGenerator = func(w http.ResponseWriter, r *http.Request) string {
 		if userID := r.Header.Get("userID"); userID != "" {
@@ -102,59 +107,78 @@ func main() {
 
 	serveMux := http.NewServeMux()
 	serveMux.Handle("/echo", server)
-	serveMux.Handle("/getBroadCast", getBroadcastHandler)
-
-	handler := cors.Default().Handler(serveMux)
-	m := func(ctx *fasthttp.RequestCtx) {
-		switch string(ctx.Path()) {
-		case "/broadcast":
-			broadcastHandler(ctx)
-		default:
-			ctx.Error("not found", fasthttp.StatusNotFound)
-		}
-	}
+	serveMux.Handle("/getBroadCast", http.HandlerFunc(getBroadcastHandler))
+	serveMux.Handle("/broadcast", http.HandlerFunc(broadcastHandler))
 
 	c := cron.New()
 	_ = c.AddFunc("@every "+config.NotifTime, func() {
 		notificationHandler()
 	})
-
-	_ = c.AddFunc("@every 10m", func() {
-		setExtentionInRedis()
-	})
-
 	c.Start()
 
 	go func() {
 		log.Printf("Listening on: %s\nPress CTRL/CMD+C to interrupt.", config.HTTPAddr)
-		log.Fatal(fasthttp.ListenAndServe(config.HTTPAddr, m))
+		log.Fatal(http.ListenAndServe(config.HTTPAddr, serveMux))
 	}()
 	//run server in https
 	log.Printf("Listening on: %s\nPress CTRL/CMD+C to interrupt.", config.Addr)
-	log.Fatal(http.ListenAndServeTLS(config.Addr, path.Join(exePath, config.CertFile), path.Join(exePath, config.KeyFile), handler))
+	//log.Fatal(http.ListenAndServeTLS(config.Addr, path.Join(exePath, config.CertFile), path.Join(exePath, config.KeyFile), serveMux))
+	log.Fatal(http.ListenAndServe(config.Addr, serveMux))
+
 }
 
-func broadcastHandler(ctx *fasthttp.RequestCtx) {
+func broadcastHandler(w http.ResponseWriter, r *http.Request) {
+	body, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		data.SetNeffosError1(model.NeffosError{
+			SocketID: "",
+			Message:  err.Error(),
+			Body:     "",
+		})
+		http.Error(w, err.Error(), 400)
+		return
+	}
 	var userMsg dto.FormDto
-	body := ctx.PostBody()
-	err := userMsg.UnmarshalBinary(body)
+	err = userMsg.UnmarshalBinary(body)
 	if err != nil {
 		data.SetNeffosError1(model.NeffosError{
 			SocketID: "",
 			Message:  err.Error(),
 			Body:     string(body),
 		})
-		ctx.SetStatusCode(fasthttp.StatusBadRequest)
+		http.Error(w, err.Error(), 400)
 		return
 	}
+	mutex.Lock()
 	formList[userMsg.Extension] = body
-	ctx.SetStatusCode(fasthttp.StatusOK)
+	w.WriteHeader(200)
+	mutex.Unlock()
+
 }
 
 func getBroadcastHandler(w http.ResponseWriter, r *http.Request) {
+	var t dto.Extension
+	err := json.NewDecoder(r.Body).Decode(&t)
+	if err != nil {
+		data.SetNeffosError1(model.NeffosError{
+			SocketID: "",
+			Message:  err.Error(),
+			Body:     strconv.Itoa(t.Extension),
+		})
+		http.Error(w, err.Error(), 400)
+		return
+	}
 	mutex.Lock()
-	defer mutex.Unlock()
-
+	val, ok := formList[t.Extension]
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	if ok {
+		delete(formList, t.Extension)
+		w.WriteHeader(200)
+		w.Write(val)
+	} else {
+		w.WriteHeader(200)
+	}
+	mutex.Unlock()
 }
 
 func notificationHandler() {
