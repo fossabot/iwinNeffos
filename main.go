@@ -85,7 +85,7 @@ func main() {
 		)
 	}
 
-	pool, err := radix.NewPool("tcp", "10.1.10.33:6379", 100, radix.PoolConnFunc(customConnFunc))
+	pool, err = radix.NewPool("tcp", "10.1.10.33:6379", 100, radix.PoolConnFunc(customConnFunc))
 
 	if err != nil {
 		panic(err)
@@ -97,6 +97,8 @@ func main() {
 		panic(err)
 	}
 	fmt.Printf("Redis Connected :[%s]\n", msg)
+
+	pool.Do(radix.Cmd(nil, "SET", "ff", "eee"))
 
 	setExtentionInRedis()
 
