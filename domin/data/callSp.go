@@ -140,7 +140,7 @@ func UpdateNotification(id int) {
 
 //SetNeffosError1 ....
 func SetNeffosError1(neffosError model.NeffosError) {
-	_, err := dbData.Exec("app.uspUpdateNotification1",
+	_, err := db.Exec("logging.UspSetNeffosError1",
 		sql.Named("PI_SocketId", neffosError.SocketID),
 		sql.Named("PI_Message", neffosError.Message),
 		sql.Named("PI_Body", neffosError.Body),
