@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -9,12 +8,7 @@ import (
 	"path"
 	"strconv"
 	"sync"
-
-	"github.com/mediocregopher/radix/v3"
-	"github.com/robfig/cron"
-
-	"github.com/kataras/neffos"
-	"github.com/kataras/neffos/gobwas"
+	"encoding/json"
 
 	_ "github.com/denisenkom/go-mssqldb"
 	_ "github.com/kardianos/minwinsvc"
@@ -23,17 +17,12 @@ import (
 	"github.com/majidbigdeli/neffosAmi/domin/data"
 	"github.com/majidbigdeli/neffosAmi/domin/dto"
 	"github.com/majidbigdeli/neffosAmi/domin/model"
-	"github.com/majidbigdeli/neffosAmi/domin/variable"
-
 	"github.com/spf13/viper"
 )
 
 var (
 	err      error
 	exePath  string
-	server   *neffos.Server
-	pool     *radix.Pool
-	prefex   string
 	formList = make(map[int][]byte)
 	mutex    = &sync.Mutex{}
 )
@@ -54,27 +43,6 @@ func init() {
 	data.GetDBData()
 	data.GetDBCore()
 	config.GetConfig()
-	prefex = "Neffos_"
-}
-
-var events = neffos.Namespaces{
-	variable.Agent: neffos.Events{
-		neffos.OnNamespaceConnected: func(c *neffos.NSConn, msg neffos.Message) error {
-			log.Printf("[%s] connected to namespace [%s].", c, msg.Namespace)
-			return nil
-		},
-
-		neffos.OnNamespaceDisconnect: func(c *neffos.NSConn, msg neffos.Message) error {
-			log.Printf("[%s] disconnected from namespace [%s].", c, msg.Namespace)
-			return nil
-		},
-
-		variable.OnUpdateStatusNotification: func(c *neffos.NSConn, msg neffos.Message) error {
-			id, _ := strconv.Atoi(string(msg.Body))
-			data.UpdateNotification(id)
-			return nil
-		},
-	},
 }
 
 func main() {
@@ -85,37 +53,10 @@ func main() {
 		}
 	}()
 
-	server = neffos.New(gobwas.DefaultUpgrader, events)
-	server.IDGenerator = func(w http.ResponseWriter, r *http.Request) string {
-		if userID := r.Header.Get("userID"); userID != "" {
-			return userID
-		}
-		return neffos.DefaultIDGenerator(w, r)
-	}
-	server.OnUpgradeError = func(err error) {
-		log.Printf("ERROR: %v", err)
-	}
-	server.OnConnect = func(c *neffos.Conn) error {
-		if c.WasReconnected() {
-			log.Printf("[%s] connection is a result of a client-side re-connection, with tries: %d", c.ID(), c.ReconnectTries)
-		}
-		log.Printf("[%s] connected to the server.", c)
-		return nil
-	}
-	server.OnDisconnect = func(c *neffos.Conn) {
-		log.Printf("[%s] disconnected from the server.", c)
-	}
-
 	serveMux := http.NewServeMux()
-	serveMux.Handle("/echo", server)
 	serveMux.Handle("/getBroadCast", http.HandlerFunc(getBroadcastHandler))
 	serveMux.Handle("/broadcast", http.HandlerFunc(broadcastHandler))
-
-	c := cron.New()
-	_ = c.AddFunc("@every "+config.NotifTime, func() {
-		notificationHandler()
-	})
-	c.Start()
+	serveMux.Handle("/GetNotif", http.HandlerFunc(getNotifHandler))
 
 	go func() {
 		log.Printf("Listening on: %s\nPress CTRL/CMD+C to interrupt.", config.HTTPAddr)
@@ -157,22 +98,25 @@ func broadcastHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func getBroadcastHandler(w http.ResponseWriter, r *http.Request) {
-	var t dto.Extension
-	err := json.NewDecoder(r.Body).Decode(&t)
+
+	numberStr := r.URL.Query().Get("Number")
+
+	number, err := strconv.Atoi(numberStr)
+
 	if err != nil {
 		data.SetNeffosError1(model.NeffosError{
 			SocketID: "",
 			Message:  err.Error(),
-			Body:     strconv.Itoa(t.Extension),
+			Body:     numberStr,
 		})
 		http.Error(w, err.Error(), 400)
 		return
 	}
 	mutex.Lock()
-	val, ok := formList[t.Extension]
+	val, ok := formList[number]
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	if ok {
-		delete(formList, t.Extension)
+		delete(formList, number)
 		w.WriteHeader(200)
 		w.Write(val)
 	} else {
@@ -181,41 +125,55 @@ func getBroadcastHandler(w http.ResponseWriter, r *http.Request) {
 	mutex.Unlock()
 }
 
-func notificationHandler() {
-	notification, err := data.GetNotif()
+func getNotifHandler(w http.ResponseWriter, r *http.Request) {
+
+	userIDStr := r.URL.Query().Get("UserId")
+
+	userID, err := strconv.Atoi(userIDStr)
+
+	if err != nil {
+		data.SetNeffosError1(model.NeffosError{
+			SocketID: "",
+			Message:  err.Error(),
+			Body:     userIDStr,
+		})
+		http.Error(w, err.Error(), 400)
+		return
+	}
+
+	notification, err := data.GetNotifByUserID(userID)
+	
 	if err != nil {
 		data.SetNeffosError1(model.NeffosError{
 			SocketID: "",
 			Message:  err.Error(),
 			Body:     "",
 		})
+		http.Error(w, err.Error(), 400)
 		return
 	}
 
+	w.Header().Set("Access-Control-Allow-Origin", "*")
 	if len(*notification) == 0 {
+		w.WriteHeader(200)
 		return
 	}
 
-	server.Broadcast(nil, neffos.Message{
-		Namespace: "default",
-		Event:     "resiveErja",
-		Body:      neffos.Marshal(notification),
-	})
-}
+	val, err := json.Marshal(notification)
 
-func setExtentionInRedis() {
-	extUser, err := data.GetExtentionUser()
 	if err != nil {
-		return
-	}
-	if len(extUser) == 0 {
+		data.SetNeffosError1(model.NeffosError{
+			SocketID: "",
+			Message:  err.Error(),
+			Body:     "",
+		})		
+		http.Error(w, err.Error(), 400)
 		return
 	}
 
-	// value only
-	for _, v := range extUser {
-		key := fmt.Sprintf("%s%s", prefex, v.Number)
-		pool.Do(radix.Cmd(nil, "SET", key, v.UserID))
-	}
+	w.WriteHeader(200)
+	w.Write(val)
+
+	
 
 }

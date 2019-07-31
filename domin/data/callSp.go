@@ -92,10 +92,10 @@ func GetUserIDByExtentionNumber(extension int) (string, error) {
 
 //GetNotifByUserID ...
 func GetNotifByUserID(userID int) (*[]model.Notification, error) {
-	var d []model.Notification
-	err := dbData.Select(&d, "SELECT  Data,	Message,MessageType,NotificationId,Status,Type,UserId FROM message.Notification WHERE [UserId] = @UserId AND [Status] = @Status",
-		sql.Named("UserId", userID),
-		sql.Named("Status", 22710),
+
+	d := []model.Notification{}
+	err := dbData.Select(&d, "[message].[UspGetNotificationbyUserId]",
+		sql.Named("PI_UserId", userID),
 	)
 	return &d, err
 }
@@ -140,7 +140,7 @@ func UpdateNotification(id int) {
 
 //SetNeffosError1 ....
 func SetNeffosError1(neffosError model.NeffosError) {
-	_, err := dbData.Exec("app.uspUpdateNotification1",
+	_, err := db.Exec("[logging].[UspSetNeffosError1]",
 		sql.Named("PI_SocketId", neffosError.SocketID),
 		sql.Named("PI_Message", neffosError.Message),
 		sql.Named("PI_Body", neffosError.Body),
