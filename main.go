@@ -107,6 +107,7 @@ func main() {
 	serveMux.Handle("/setBroadCast", http.HandlerFunc(setBroadcastHandler))
 	serveMux.Handle("/broadcast", http.HandlerFunc(broadcastHandler))
 
+	startConnectionManager(context.TODO())
 	go func() {
 		c := cron.New()
 		_ = c.AddFunc("@every "+config.NotifTime, func() {
@@ -233,18 +234,19 @@ func startConnectionManager(ctx context.Context) {
 				uID := strconv.Itoa(nf.UserID)
 				c, ok := connections[uID]
 				if !ok {
-					data.UpdateNotification(nf.UserID, 22710)
+					data.UpdateNotification(nf.NotificationID, 22710)
 					continue
 				} else {
 					ok = c.Write(neffos.Message{
+						To:        uID,
 						Namespace: variable.Agent,
 						Event:     "notif",
 						Body:      neffos.Marshal(nf),
 					})
 					if ok {
-						data.UpdateNotification(nf.UserID, 22712)
+						data.UpdateNotification(nf.NotificationID, 22712)
 					} else {
-						data.UpdateNotification(nf.UserID, 22710)
+						data.UpdateNotification(nf.NotificationID, 22710)
 					}
 				}
 
