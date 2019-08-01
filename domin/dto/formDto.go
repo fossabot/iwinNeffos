@@ -21,7 +21,7 @@ func (s *FormDto) UnmarshalBinary(b []byte) error {
 	return json.Unmarshal(b, &s)
 }
 
-//Extension ...
-type Extension struct {
-	Extension int `json:"Extension"`
+//ExtensionModel ....
+type ExtensionModel struct {
+	Number int `json:"Number"`
 }

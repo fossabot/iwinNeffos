@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -108,7 +107,7 @@ func main() {
 
 	serveMux := http.NewServeMux()
 	serveMux.Handle("/echo", server)
-	serveMux.Handle("/getBroadCast", http.HandlerFunc(getBroadcastHandler))
+	serveMux.Handle("/setBroadCast", http.HandlerFunc(setBroadcastHandler))
 	serveMux.Handle("/broadcast", http.HandlerFunc(broadcastHandler))
 
 	c := cron.New()
@@ -156,23 +155,24 @@ func broadcastHandler(w http.ResponseWriter, r *http.Request) {
 
 }
 
-func getBroadcastHandler(w http.ResponseWriter, r *http.Request) {
-	var t dto.Extension
-	err := json.NewDecoder(r.Body).Decode(&t)
+func setBroadcastHandler(w http.ResponseWriter, r *http.Request) {
+
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	number := r.URL.Query().Get("Number")
+	num, err := strconv.Atoi(number)
 	if err != nil {
 		data.SetNeffosError1(model.NeffosError{
 			SocketID: "",
 			Message:  err.Error(),
-			Body:     strconv.Itoa(t.Extension),
+			Body:     number,
 		})
 		http.Error(w, err.Error(), 400)
 		return
 	}
 	mutex.Lock()
-	val, ok := formList[t.Extension]
-	w.Header().Set("Access-Control-Allow-Origin", "*")
+	val, ok := formList[num]
 	if ok {
-		delete(formList, t.Extension)
+		delete(formList, num)
 		w.WriteHeader(200)
 		w.Write(val)
 	} else {
