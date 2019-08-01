@@ -238,7 +238,6 @@ func startConnectionManager(ctx context.Context) {
 					continue
 				} else {
 					ok = c.Write(neffos.Message{
-						To:        uID,
 						Namespace: variable.Agent,
 						Event:     "notif",
 						Body:      neffos.Marshal(nf),
