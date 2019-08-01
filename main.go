@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -9,7 +10,6 @@ import (
 	"strconv"
 	"sync"
 
-	"github.com/mediocregopher/radix/v3"
 	"github.com/robfig/cron"
 
 	"github.com/kataras/neffos"
@@ -28,13 +28,15 @@ import (
 )
 
 var (
-	err      error
-	exePath  string
-	server   *neffos.Server
-	pool     *radix.Pool
-	prefex   string
-	formList = make(map[int][]byte)
-	mutex    = &sync.Mutex{}
+	err              error
+	exePath          string
+	server           *neffos.Server
+	formList         = make(map[int][]byte)
+	mutex            = &sync.Mutex{}
+	connections      = make(map[string]*neffos.Conn)
+	addConnection    = make(chan *neffos.Conn)
+	removeConnection = make(chan *neffos.Conn)
+	notify           = make(chan model.Notification)
 )
 
 func init() {
@@ -53,7 +55,6 @@ func init() {
 	data.GetDBData()
 	data.GetDBCore()
 	config.GetConfig()
-	prefex = "Neffos_"
 }
 
 var events = neffos.Namespaces{
@@ -65,12 +66,6 @@ var events = neffos.Namespaces{
 
 		neffos.OnNamespaceDisconnect: func(c *neffos.NSConn, msg neffos.Message) error {
 			log.Printf("[%s] disconnected from namespace [%s].", c, msg.Namespace)
-			return nil
-		},
-
-		variable.OnUpdateStatusNotification: func(c *neffos.NSConn, msg neffos.Message) error {
-			id, _ := strconv.Atoi(string(msg.Body))
-			data.UpdateNotification(id)
 			return nil
 		},
 	},
@@ -95,6 +90,7 @@ func main() {
 		log.Printf("ERROR: %v", err)
 	}
 	server.OnConnect = func(c *neffos.Conn) error {
+		addConnection <- c
 		if c.WasReconnected() {
 			log.Printf("[%s] connection is a result of a client-side re-connection, with tries: %d", c.ID(), c.ReconnectTries)
 		}
@@ -102,6 +98,7 @@ func main() {
 		return nil
 	}
 	server.OnDisconnect = func(c *neffos.Conn) {
+		removeConnection <- c
 		log.Printf("[%s] disconnected from the server.", c)
 	}
 
@@ -110,11 +107,13 @@ func main() {
 	serveMux.Handle("/setBroadCast", http.HandlerFunc(setBroadcastHandler))
 	serveMux.Handle("/broadcast", http.HandlerFunc(broadcastHandler))
 
-	c := cron.New()
-	_ = c.AddFunc("@every "+config.NotifTime, func() {
-		notificationHandler()
-	})
-	c.Start()
+	go func() {
+		c := cron.New()
+		_ = c.AddFunc("@every "+config.NotifTime, func() {
+			notificationHandler()
+		})
+		c.Start()
+	}()
 
 	go func() {
 		log.Printf("Listening on: %s\nPress CTRL/CMD+C to interrupt.", config.HTTPAddr)
@@ -123,7 +122,6 @@ func main() {
 	//run server in https
 	log.Printf("Listening on: %s\nPress CTRL/CMD+C to interrupt.", config.Addr)
 	log.Fatal(http.ListenAndServeTLS(config.Addr, path.Join(exePath, config.CertFile), path.Join(exePath, config.KeyFile), serveMux))
-
 }
 
 func broadcastHandler(w http.ResponseWriter, r *http.Request) {
@@ -152,7 +150,6 @@ func broadcastHandler(w http.ResponseWriter, r *http.Request) {
 	formList[userMsg.Extension] = body
 	w.WriteHeader(200)
 	mutex.Unlock()
-
 }
 
 func setBroadcastHandler(w http.ResponseWriter, r *http.Request) {
@@ -182,7 +179,21 @@ func setBroadcastHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func notificationHandler() {
-	notification, err := data.GetNotif()
+
+	connectionIDs := []model.IDTvp{}
+
+	for c := range connections {
+		var connectionID model.IDTvp
+		cID, err := strconv.Atoi(c)
+		if err != nil {
+			fmt.Println(err)
+		}
+		connectionID.ID = cID
+		connectionIDs = append(connectionIDs, connectionID)
+	}
+
+	notifications, err := data.GetNotificationList(connectionIDs)
+
 	if err != nil {
 		data.SetNeffosError1(model.NeffosError{
 			SocketID: "",
@@ -192,30 +203,55 @@ func notificationHandler() {
 		return
 	}
 
-	if len(*notification) == 0 {
+	if notifications == nil {
 		return
 	}
 
-	server.Broadcast(nil, neffos.Message{
-		Namespace: "default",
-		Event:     "resiveErja",
-		Body:      neffos.Marshal(notification),
-	})
+	if n := len(*notifications); n == 0 {
+		return
+	}
+
+	for _, nf := range *notifications {
+		notify <- nf
+	}
+
 }
 
-func setExtentionInRedis() {
-	extUser, err := data.GetExtentionUser()
-	if err != nil {
-		return
-	}
-	if len(extUser) == 0 {
-		return
+func startConnectionManager(ctx context.Context) {
+	if ctx == nil {
+		ctx = context.TODO()
 	}
 
-	// value only
-	for _, v := range extUser {
-		key := fmt.Sprintf("%s%s", prefex, v.Number)
-		pool.Do(radix.Cmd(nil, "SET", key, v.UserID))
-	}
+	go func() {
+		for {
+			select {
+			case c := <-addConnection:
+				connections[c.ID()] = c
+			case c := <-removeConnection:
+				delete(connections, c.ID())
+			case nf := <-notify:
+				uID := strconv.Itoa(nf.UserID)
+				c, ok := connections[uID]
+				if !ok {
+					data.UpdateNotification(nf.UserID, 22710)
+					continue
+				} else {
+					ok = c.Write(neffos.Message{
+						Namespace: variable.Agent,
+						Event:     "resiveErja",
+						Body:      neffos.Marshal(nf),
+					})
+					if ok {
+						data.UpdateNotification(nf.UserID, 22712)
+					} else {
+						data.UpdateNotification(nf.UserID, 22710)
+					}
+				}
+
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
 
 }
