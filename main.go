@@ -238,7 +238,7 @@ func startConnectionManager(ctx context.Context) {
 				} else {
 					ok = c.Write(neffos.Message{
 						Namespace: variable.Agent,
-						Event:     "resiveErja",
+						Event:     "notif",
 						Body:      neffos.Marshal(nf),
 					})
 					if ok {
