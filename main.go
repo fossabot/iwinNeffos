@@ -9,6 +9,7 @@ import (
 	"path"
 	"strconv"
 	"sync"
+	"time"
 
 	"github.com/robfig/cron"
 
@@ -68,6 +69,28 @@ var events = neffos.Namespaces{
 			log.Printf("[%s] disconnected from namespace [%s].", c, msg.Namespace)
 			return nil
 		},
+		"ackNotif": func(c *neffos.NSConn, msg neffos.Message) error {
+			var nf []model.Notification
+			err := msg.Unmarshal(&nf)
+			if err != nil {
+				data.SetNeffosError1(model.NeffosError{
+					SocketID: "",
+					Message:  err.Error(),
+					Body:     "",
+				})
+				return err
+			}
+			var iDTvps []model.IDTvp
+			for _, n := range nf {
+				var iDt model.IDTvp
+				iDt.ID = n.NotificationID
+				iDTvps = append(iDTvps, iDt)
+			}
+
+			data.UpdateNotificationList(iDTvps, 22712)
+
+			return nil
+		},
 	},
 }
 
@@ -112,6 +135,9 @@ func main() {
 		c := cron.New()
 		_ = c.AddFunc("@every "+config.NotifTime, func() {
 			notificationHandler()
+		})
+		_ = c.AddFunc("@every 2m", func() {
+			changeStatusHandler()
 		})
 		c.Start()
 	}()
@@ -212,17 +238,28 @@ func notificationHandler() {
 		return
 	}
 
-	for _, nf := range *notifications {
-		notify <- nf
+	output := make(map[int][]model.Notification)
+
+	for _, v := range *notifications {
+		output[v.UserID] = append(output[v.UserID], v)
 	}
 
+	for k, m := range output {
+		uID := strconv.Itoa(k)
+		time.Sleep(10 * time.Millisecond)
+		server.Broadcast(nil, neffos.Message{
+			To:        uID,
+			Namespace: variable.Agent,
+			Event:     "notif",
+			Body:      neffos.Marshal(m),
+		})
+	}
 }
 
 func startConnectionManager(ctx context.Context) {
 	if ctx == nil {
 		ctx = context.TODO()
 	}
-
 	go func() {
 		for {
 			select {
@@ -231,22 +268,17 @@ func startConnectionManager(ctx context.Context) {
 			case c := <-removeConnection:
 				delete(connections, c.ID())
 			case nf := <-notify:
-				uID := strconv.Itoa(nf.UserID)
+				uID := fmt.Sprint(nf.UserID)
 				c, ok := connections[uID]
 				if !ok {
 					data.UpdateNotification(nf.NotificationID, 22710)
 					continue
 				} else {
-					ok = c.Write(neffos.Message{
+					c.Write(neffos.Message{
 						Namespace: variable.Agent,
 						Event:     "notif",
 						Body:      neffos.Marshal(nf),
 					})
-					if ok {
-						data.UpdateNotification(nf.NotificationID, 22712)
-					} else {
-						data.UpdateNotification(nf.NotificationID, 22710)
-					}
 				}
 
 			case <-ctx.Done():
@@ -254,5 +286,8 @@ func startConnectionManager(ctx context.Context) {
 			}
 		}
 	}()
+}
 
+func changeStatusHandler() {
+	data.ChangeSendingStatusToNew()
 }

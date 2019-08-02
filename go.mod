@@ -3,6 +3,8 @@ module github.com/majidbigdeli/neffosAmi
 go 1.12
 
 require (
+	github.com/ahmetb/go-linq v3.0.0+incompatible
+	github.com/ahmetb/go-linq/v3 v3.1.0 // indirect
 	github.com/denisenkom/go-mssqldb v0.0.0-20190724012636-11b2859924c1
 	github.com/jmoiron/sqlx v1.2.0
 	github.com/json-iterator/go v1.1.7

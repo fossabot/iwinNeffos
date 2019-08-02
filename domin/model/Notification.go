@@ -12,6 +12,11 @@ type Notification struct {
 	Message        string `json:"Message" db:"Message"`
 }
 
+type NotificationStu struct {
+	UserID       int `json:"UserId" db:"UserId"`
+	Notification []Notification
+}
+
 // NeffosError ...
 type NeffosError struct {
 	SocketID string `json:"socketId" db:"socketId"`
