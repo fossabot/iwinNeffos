@@ -73,7 +73,7 @@ var events = neffos.Namespaces{
 			var nf []model.Notification
 			err := msg.Unmarshal(&nf)
 			if err != nil {
-				data.SetNeffosError1(model.NeffosError{
+				data.SetNeffosError(model.NeffosError{
 					SocketID: "",
 					Message:  err.Error(),
 					Body:     "",
@@ -154,7 +154,7 @@ func main() {
 func broadcastHandler(w http.ResponseWriter, r *http.Request) {
 	body, err := ioutil.ReadAll(r.Body)
 	if err != nil {
-		data.SetNeffosError1(model.NeffosError{
+		data.SetNeffosError(model.NeffosError{
 			SocketID: "",
 			Message:  err.Error(),
 			Body:     "",
@@ -165,7 +165,7 @@ func broadcastHandler(w http.ResponseWriter, r *http.Request) {
 	var userMsg dto.FormDto
 	err = userMsg.UnmarshalBinary(body)
 	if err != nil {
-		data.SetNeffosError1(model.NeffosError{
+		data.SetNeffosError(model.NeffosError{
 			SocketID: "",
 			Message:  err.Error(),
 			Body:     string(body),
@@ -185,7 +185,7 @@ func setBroadcastHandler(w http.ResponseWriter, r *http.Request) {
 	number := r.URL.Query().Get("Number")
 	num, err := strconv.Atoi(number)
 	if err != nil {
-		data.SetNeffosError1(model.NeffosError{
+		data.SetNeffosError(model.NeffosError{
 			SocketID: "",
 			Message:  err.Error(),
 			Body:     number,
@@ -198,7 +198,7 @@ func setBroadcastHandler(w http.ResponseWriter, r *http.Request) {
 	if ok {
 		delete(formList, num)
 		w.WriteHeader(200)
-		w.Write(val)
+		_, _ = w.Write(val)
 	} else {
 		w.WriteHeader(200)
 	}
@@ -207,7 +207,7 @@ func setBroadcastHandler(w http.ResponseWriter, r *http.Request) {
 
 func notificationHandler() {
 
-	connectionIDs := []model.IDTvp{}
+	var connectionIDs []model.IDTvp
 
 	for c := range connections {
 		var connectionID model.IDTvp
@@ -222,7 +222,7 @@ func notificationHandler() {
 	notifications, err := data.GetNotificationList(connectionIDs)
 
 	if err != nil {
-		data.SetNeffosError1(model.NeffosError{
+		data.SetNeffosError(model.NeffosError{
 			SocketID: "",
 			Message:  err.Error(),
 			Body:     "",
