@@ -9,7 +9,6 @@ import (
 	"path"
 	"strconv"
 	"sync"
-	"time"
 
 	"github.com/robfig/cron"
 
@@ -109,6 +108,9 @@ func main() {
 		}
 		return neffos.DefaultIDGenerator(w, r)
 	}
+
+	server.SyncBroadcaster = true
+
 	server.OnUpgradeError = func(err error) {
 		log.Printf("ERROR: %v", err)
 	}
@@ -246,7 +248,6 @@ func notificationHandler() {
 
 	for k, m := range output {
 		uID := strconv.Itoa(k)
-		time.Sleep(10 * time.Millisecond)
 		server.Broadcast(nil, neffos.Message{
 			To:        uID,
 			Namespace: variable.Agent,
