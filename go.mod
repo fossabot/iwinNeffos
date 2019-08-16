@@ -1,4 +1,4 @@
-module github.com/majidbigdeli/neffosAmi
+module github.com/majidbigdeli/iwinNeffos
 
 go 1.12
 

@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	mssql "github.com/denisenkom/go-mssqldb"
-	"github.com/majidbigdeli/neffosAmi/domin/model"
+	"github.com/majidbigdeli/iwinNeffos/domin/model"
 )
 
 //GetNotificationList ...

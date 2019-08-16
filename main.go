@@ -18,11 +18,11 @@ import (
 	_ "github.com/denisenkom/go-mssqldb"
 	_ "github.com/kardianos/minwinsvc"
 	"github.com/kardianos/osext"
-	"github.com/majidbigdeli/neffosAmi/domin/config"
-	"github.com/majidbigdeli/neffosAmi/domin/data"
-	"github.com/majidbigdeli/neffosAmi/domin/dto"
-	"github.com/majidbigdeli/neffosAmi/domin/model"
-	"github.com/majidbigdeli/neffosAmi/domin/variable"
+	"github.com/majidbigdeli/iwinNeffos/domin/config"
+	"github.com/majidbigdeli/iwinNeffos/domin/data"
+	"github.com/majidbigdeli/iwinNeffos/domin/dto"
+	"github.com/majidbigdeli/iwinNeffos/domin/model"
+	"github.com/majidbigdeli/iwinNeffos/domin/variable"
 
 	"github.com/spf13/viper"
 )
