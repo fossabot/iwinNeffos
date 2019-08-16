@@ -1,20 +1,19 @@
 package main
 
 import (
-	"encoding/json"
+	"context"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"path"
 	"strconv"
-	"time"
+	"sync"
 
-	"github.com/mediocregopher/radix/v3"
 	"github.com/robfig/cron"
 
 	"github.com/kataras/neffos"
 	"github.com/kataras/neffos/gobwas"
-	"github.com/valyala/fasthttp"
 
 	_ "github.com/denisenkom/go-mssqldb"
 	_ "github.com/kardianos/minwinsvc"
@@ -25,16 +24,19 @@ import (
 	"github.com/majidbigdeli/neffosAmi/domin/model"
 	"github.com/majidbigdeli/neffosAmi/domin/variable"
 
-	"github.com/rs/cors"
 	"github.com/spf13/viper"
 )
 
 var (
-	err     error
-	exePath string
-	server  *neffos.Server
-	pool    *radix.Pool
-	prefex  string
+	err              error
+	exePath          string
+	server           *neffos.Server
+	formList         = make(map[int][]byte)
+	mutex            = &sync.Mutex{}
+	connections      = make(map[string]*neffos.Conn)
+	addConnection    = make(chan *neffos.Conn)
+	removeConnection = make(chan *neffos.Conn)
+	notify           = make(chan model.Notification)
 )
 
 func init() {
@@ -53,7 +55,6 @@ func init() {
 	data.GetDBData()
 	data.GetDBCore()
 	config.GetConfig()
-	prefex = "Neffos_"
 }
 
 var events = neffos.Namespaces{
@@ -67,10 +68,26 @@ var events = neffos.Namespaces{
 			log.Printf("[%s] disconnected from namespace [%s].", c, msg.Namespace)
 			return nil
 		},
+		"ackNotif": func(c *neffos.NSConn, msg neffos.Message) error {
+			var nf []model.Notification
+			err := msg.Unmarshal(&nf)
+			if err != nil {
+				data.SetNeffosError(model.NeffosError{
+					SocketID: "",
+					Message:  err.Error(),
+					Body:     "",
+				})
+				return err
+			}
+			var iDTvps []model.IDTvp
+			for _, n := range nf {
+				var iDt model.IDTvp
+				iDt.ID = n.NotificationID
+				iDTvps = append(iDTvps, iDt)
+			}
 
-		variable.OnUpdateStatusNotification: func(c *neffos.NSConn, msg neffos.Message) error {
-			id, _ := strconv.Atoi(string(msg.Body))
-			data.UpdateNotification(id)
+			data.UpdateNotificationList(iDTvps, 22712)
+
 			return nil
 		},
 	},
@@ -78,27 +95,11 @@ var events = neffos.Namespaces{
 
 func main() {
 
-	customConnFunc := func(network, addr string) (radix.Conn, error) {
-		return radix.Dial(network, addr,
-			radix.DialTimeout(1*time.Minute),
-			radix.DialAuthPass("iwinrds"),
-		)
-	}
-
-	pool, err := radix.NewPool("tcp", "10.1.10.33:6379", 100, radix.PoolConnFunc(customConnFunc))
-
-	if err != nil {
-		panic(err)
-	}
-
-	var msg string
-	err = pool.Do(radix.Cmd(&msg, "PING"))
-	if err != nil {
-		panic(err)
-	}
-	fmt.Printf("Redis Connected :[%s]\n", msg)
-
-	setExtentionInRedis()
+	defer func() {
+		if err := recover(); err != nil {
+			fmt.Println(err)
+		}
+	}()
 
 	server = neffos.New(gobwas.DefaultUpgrader, events)
 	server.IDGenerator = func(w http.ResponseWriter, r *http.Request) string {
@@ -107,10 +108,14 @@ func main() {
 		}
 		return neffos.DefaultIDGenerator(w, r)
 	}
+
+	server.SyncBroadcaster = true
+
 	server.OnUpgradeError = func(err error) {
 		log.Printf("ERROR: %v", err)
 	}
 	server.OnConnect = func(c *neffos.Conn) error {
+		addConnection <- c
 		if c.WasReconnected() {
 			log.Printf("[%s] connection is a result of a client-side re-connection, with tries: %d", c.ID(), c.ReconnectTries)
 		}
@@ -118,93 +123,108 @@ func main() {
 		return nil
 	}
 	server.OnDisconnect = func(c *neffos.Conn) {
+		removeConnection <- c
 		log.Printf("[%s] disconnected from the server.", c)
 	}
 
 	serveMux := http.NewServeMux()
 	serveMux.Handle("/echo", server)
+	serveMux.Handle("/setBroadCast", http.HandlerFunc(setBroadcastHandler))
+	serveMux.Handle("/broadcast", http.HandlerFunc(broadcastHandler))
 
-	handler := cors.Default().Handler(serveMux)
-	m := func(ctx *fasthttp.RequestCtx) {
-		switch string(ctx.Path()) {
-		case "/broadcast":
-			broadcastHandler(ctx)
-		default:
-			ctx.Error("not found", fasthttp.StatusNotFound)
-		}
-	}
-	c := cron.New()
-	_ = c.AddFunc("@every "+config.NotifTime, func() {
-		notificationHandler()
-	})
-
-	_ = c.AddFunc("@every 10m", func() {
-		setExtentionInRedis()
-	})
-
-	c.Start()
+	startConnectionManager(context.TODO())
+	go func() {
+		c := cron.New()
+		_ = c.AddFunc("@every "+config.NotifTime, func() {
+			notificationHandler()
+		})
+		_ = c.AddFunc("@every 2m", func() {
+			changeStatusHandler()
+		})
+		c.Start()
+	}()
 
 	go func() {
 		log.Printf("Listening on: %s\nPress CTRL/CMD+C to interrupt.", config.HTTPAddr)
-		log.Fatal(fasthttp.ListenAndServe(config.HTTPAddr, m))
+		log.Fatal(http.ListenAndServe(config.HTTPAddr, serveMux))
 	}()
 	//run server in https
 	log.Printf("Listening on: %s\nPress CTRL/CMD+C to interrupt.", config.Addr)
-	log.Fatal(http.ListenAndServeTLS(config.Addr, path.Join(exePath, config.CertFile), path.Join(exePath, config.KeyFile), handler))
+	log.Fatal(http.ListenAndServeTLS(config.Addr, path.Join(exePath, config.CertFile), path.Join(exePath, config.KeyFile), serveMux))
 }
 
-func broadcastHandler(ctx *fasthttp.RequestCtx) {
+func broadcastHandler(w http.ResponseWriter, r *http.Request) {
+	body, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		data.SetNeffosError(model.NeffosError{
+			SocketID: "",
+			Message:  err.Error(),
+			Body:     "",
+		})
+		http.Error(w, err.Error(), 400)
+		return
+	}
 	var userMsg dto.FormDto
-	body := ctx.PostBody()
-
-	err = json.Unmarshal(body, &userMsg)
+	err = userMsg.UnmarshalBinary(body)
 	if err != nil {
-		data.SetNeffosError1(model.NeffosError{
+		data.SetNeffosError(model.NeffosError{
 			SocketID: "",
 			Message:  err.Error(),
 			Body:     string(body),
 		})
-		ctx.SetStatusCode(fasthttp.StatusBadRequest)
+		http.Error(w, err.Error(), 400)
 		return
 	}
+	mutex.Lock()
+	formList[userMsg.Extension] = body
+	w.WriteHeader(200)
+	mutex.Unlock()
+}
 
-	key := fmt.Sprintf("%s%d", prefex, userMsg.Extension)
-	var userID string
-	err := pool.Do(radix.Cmd(&userID, "GET", key))
+func setBroadcastHandler(w http.ResponseWriter, r *http.Request) {
 
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	number := r.URL.Query().Get("Number")
+	num, err := strconv.Atoi(number)
 	if err != nil {
-		data.SetNeffosError1(model.NeffosError{
+		data.SetNeffosError(model.NeffosError{
 			SocketID: "",
 			Message:  err.Error(),
-			Body:     string(body),
+			Body:     number,
 		})
-		ctx.SetStatusCode(fasthttp.StatusBadRequest)
+		http.Error(w, err.Error(), 400)
 		return
 	}
-
-	if userID == "" {
-		data.SetNeffosError1(model.NeffosError{
-			SocketID: "",
-			Message:  "userId is empty",
-			Body:     string(body),
-		})
-		ctx.SetStatusCode(fasthttp.StatusBadRequest)
-		return
+	mutex.Lock()
+	val, ok := formList[num]
+	if ok {
+		delete(formList, num)
+		w.WriteHeader(200)
+		_, _ = w.Write(val)
+	} else {
+		w.WriteHeader(200)
 	}
-	server.Broadcast(nil, neffos.Message{
-		To:        userID,
-		Namespace: "default",
-		Event:     "showForm",
-		Body:      body,
-	})
-	//data.InsertLogForForm(userMsg.Extension, userMsg.Direction, 1, userMsg.CallID, userMsg.CallerNumber)
-	ctx.SetStatusCode(fasthttp.StatusOK)
+	mutex.Unlock()
 }
 
 func notificationHandler() {
-	notification, err := data.GetNotif()
+
+	var connectionIDs []model.IDTvp
+
+	for c := range connections {
+		var connectionID model.IDTvp
+		cID, err := strconv.Atoi(c)
+		if err != nil {
+			fmt.Println(err)
+		}
+		connectionID.ID = cID
+		connectionIDs = append(connectionIDs, connectionID)
+	}
+
+	notifications, err := data.GetNotificationList(connectionIDs)
+
 	if err != nil {
-		data.SetNeffosError1(model.NeffosError{
+		data.SetNeffosError(model.NeffosError{
 			SocketID: "",
 			Message:  err.Error(),
 			Body:     "",
@@ -212,30 +232,63 @@ func notificationHandler() {
 		return
 	}
 
-	if len(*notification) == 0 {
+	if notifications == nil {
 		return
 	}
 
-	server.Broadcast(nil, neffos.Message{
-		Namespace: "default",
-		Event:     "resiveErja",
-		Body:      neffos.Marshal(notification),
-	})
+	if n := len(*notifications); n == 0 {
+		return
+	}
+
+	output := make(map[int][]model.Notification)
+
+	for _, v := range *notifications {
+		output[v.UserID] = append(output[v.UserID], v)
+	}
+
+	for k, m := range output {
+		uID := strconv.Itoa(k)
+		server.Broadcast(nil, neffos.Message{
+			To:        uID,
+			Namespace: variable.Agent,
+			Event:     "notif",
+			Body:      neffos.Marshal(m),
+		})
+	}
 }
 
-func setExtentionInRedis() {
-	extUser, err := data.GetExtentionUser()
-	if err != nil {
-		return
+func startConnectionManager(ctx context.Context) {
+	if ctx == nil {
+		ctx = context.TODO()
 	}
-	if len(extUser) == 0 {
-		return
-	}
+	go func() {
+		for {
+			select {
+			case c := <-addConnection:
+				connections[c.ID()] = c
+			case c := <-removeConnection:
+				delete(connections, c.ID())
+			case nf := <-notify:
+				uID := fmt.Sprint(nf.UserID)
+				c, ok := connections[uID]
+				if !ok {
+					data.UpdateNotification(nf.NotificationID, 22710)
+					continue
+				} else {
+					c.Write(neffos.Message{
+						Namespace: variable.Agent,
+						Event:     "notif",
+						Body:      neffos.Marshal(nf),
+					})
+				}
 
-	// value only
-	for _, v := range extUser {
-		key := fmt.Sprintf("%s%s", prefex, v.Number)
-		pool.Do(radix.Cmd(nil, "SET", key, v.UserID))
-	}
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+}
 
+func changeStatusHandler() {
+	data.ChangeSendingStatusToNew()
 }
