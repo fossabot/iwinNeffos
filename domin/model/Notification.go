@@ -12,6 +12,7 @@ type Notification struct {
 	Message        string `json:"Message" db:"Message"`
 }
 
+//NotificationStu ...
 type NotificationStu struct {
 	UserID       int `json:"UserId" db:"UserId"`
 	Notification []Notification

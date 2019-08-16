@@ -59,7 +59,7 @@ func UpdateNotification(id, status int) {
 
 }
 
-//SetNeffosError1 ....
+//SetNeffosError ....
 func SetNeffosError(neffosError model.NeffosError) {
 	_, err := db.Exec("[logging].[UspSetNeffosError1]",
 		sql.Named("PI_SocketId", neffosError.SocketID),
