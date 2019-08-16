@@ -1,0 +1,10 @@
+language: go
+os:
+  - linux
+  - osx
+go:
+  - 1.12.x
+go_import_path: github.com/majidbigdeli/iwinNeffos
+install:
+  - go get ./...
+
