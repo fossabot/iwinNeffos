@@ -5,6 +5,9 @@ os:
 go:
   - 1.12.x
 go_import_path: github.com/majidbigdeli/iwinNeffos
+env:
+ global:
+   - GO111MODULE=on
 install:
   - go get ./...
 
